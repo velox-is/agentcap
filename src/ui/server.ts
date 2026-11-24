@@ -4,12 +4,13 @@ import type Database from 'better-sqlite3';
 import type { Config } from '../config.js';
 import {
   killTask,
-  maxRowid,
+  maxSeq,
   recentRequests,
   requestsSince,
   settledRequests,
   taskRollup,
   untrackedRollup,
+  type TaskRollup,
 } from './queries.js';
 
 export interface DashboardDeps {
@@ -17,6 +18,10 @@ export interface DashboardDeps {
   config: Config;
   now?: () => number;
 }
+
+// Rows rendered at once. Above this the table reorders faster than it can be
+// read, so the top 100 by burn are shown and the count of the rest is printed.
+const MAX_TASK_ROWS = 100;
 
 // One page, tables only. The client never polls: the server pushes over SSE and
 // the client keeps the last 500 rows in a ring buffer so a long session cannot
@@ -32,6 +37,7 @@ const PAGE = String.raw`<!doctype html>
   h1 { font-size:13px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
   h2 { font-size:11px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:28px 0 8px; }
   .sub { color:var(--dim); margin:0 0 20px; }
+  .more { color:var(--dim); font-size:11px; margin:6px 0 0; }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
   th { text-align:left; font-weight:500; color:var(--dim); font-size:11px; letter-spacing:.08em; text-transform:uppercase; border-bottom:1px solid var(--line); padding:6px 8px; }
   td { padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -58,7 +64,7 @@ const PAGE = String.raw`<!doctype html>
 <div id="empty"></div>
 
 <h2>tasks</h2>
-<table>
+<table id="tasksTable">
   <thead><tr>
     <th scope="col">task</th><th scope="col">status</th>
     <th scope="col" class="num">tokens</th><th scope="col" class="num">cost</th>
@@ -67,6 +73,7 @@ const PAGE = String.raw`<!doctype html>
   </tr></thead>
   <tbody id="tasks"><tr><td class="idle" colspan="7">no tasks yet</td></tr></tbody>
 </table>
+<p class="more" id="more"></p>
 
 <h2>requests</h2>
 <table>
@@ -81,8 +88,16 @@ const PAGE = String.raw`<!doctype html>
 <script>
 (function () {
   var MAX = 500;
+  // Ordering is throttled and frozen; contents are not. A new or terminal row
+  // merges on the tick it arrives, but the table only re-sorts every 2s and
+  // stops re-sorting entirely while the pointer is over it or a kill button has
+  // focus — otherwise the button moves out from under the cursor mid-click.
+  var SORT_EVERY = 2000;
   var feed = [];
   var taskRows = [];
+  var order = [];
+  var lastSort = 0;
+  var frozen = false;
   var untracked = { tokens:0, usd:0, steps:0, estimated:0, unpriced:0 };
   var providers = 0;
 
@@ -118,16 +133,56 @@ const PAGE = String.raw`<!doctype html>
       '<pre>export OPENAI_BASE_URL=http://127.0.0.1:4100/v1</pre></div>';
   }
 
-  function renderTasks() {
-    var body = document.getElementById('tasks');
-    if (taskRows.length === 0) {
-      body.innerHTML = '<tr><td class="idle" colspan="7">no tasks yet — agentcap task new --name demo</td></tr>';
+  // Order maintenance: a full sort at most every SORT_EVERY while not frozen;
+  // otherwise only append ids we have not seen and drop ids that are gone, so
+  // the rows present stay exactly where they were.
+  function syncOrder() {
+    var present = {};
+    var i;
+    for (i = 0; i < taskRows.length; i++) present[taskRows[i].id] = true;
+
+    if (!frozen && Date.now() - lastSort >= SORT_EVERY) {
+      order = taskRows.slice().sort(function (a, b) { return b.tokens - a.tokens; })
+        .map(function (t) { return t.id; });
+      lastSort = Date.now();
       return;
     }
-    var rows = taskRows.slice().sort(function (a, b) { return b.tokens - a.tokens; });
+
+    var seen = {};
+    var next = [];
+    for (i = 0; i < order.length; i++) {
+      if (present[order[i]] === true && seen[order[i]] !== true) {
+        next.push(order[i]);
+        seen[order[i]] = true;
+      }
+    }
+    for (i = 0; i < taskRows.length; i++) {
+      var id = taskRows[i].id;
+      if (seen[id] !== true) { next.push(id); seen[id] = true; }
+    }
+    order = next;
+  }
+
+  function renderTasks() {
+    var body = document.getElementById('tasks');
+    var more = document.getElementById('more');
+    if (taskRows.length === 0) {
+      body.innerHTML = '<tr><td class="idle" colspan="7">no tasks yet — agentcap task new --name demo</td></tr>';
+      more.textContent = '';
+      return;
+    }
+
+    syncOrder();
+
+    var byId = {};
+    var i;
+    for (i = 0; i < taskRows.length; i++) byId[taskRows[i].id] = taskRows[i];
+
+    var shown = Math.min(order.length, ${MAX_TASK_ROWS});
     var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var t = rows[i];
+    for (i = 0; i < shown; i++) {
+      var t = byId[order[i]];
+      if (t === undefined) continue;
       var share = t.steps > 0 ? Math.round((t.estimated / t.steps) * 100) : 0;
       var dead = t.status === 'killed' || t.status === 'stuck';
       html += '<tr>' +
@@ -154,6 +209,9 @@ const PAGE = String.raw`<!doctype html>
       '<td class="dim">uncapped</td>' +
       '</tr>';
     body.innerHTML = html;
+    more.textContent = order.length > shown
+      ? 'showing ' + shown + ' of ' + order.length + ' by burn'
+      : '';
   }
 
   function renderFeed() {
@@ -192,6 +250,7 @@ const PAGE = String.raw`<!doctype html>
       taskRows = msg.tasks;
       untracked = msg.untracked;
       feed = msg.feed.slice(0, MAX);
+      lastSort = 0;
     } else if (msg.type === 'tick') {
       taskRows = msg.tasks;
       untracked = msg.untracked;
@@ -210,7 +269,13 @@ const PAGE = String.raw`<!doctype html>
     render();
   }
 
-  document.getElementById('tasks').addEventListener('click', function (e) {
+  var table = document.getElementById('tasksTable');
+  table.addEventListener('mouseenter', function () { frozen = true; });
+  table.addEventListener('mouseleave', function () { frozen = false; lastSort = 0; renderTasks(); });
+  table.addEventListener('focusin', function () { frozen = true; });
+  table.addEventListener('focusout', function () { frozen = false; lastSort = 0; renderTasks(); });
+
+  table.addEventListener('click', function (e) {
     var id = e.target.getAttribute && e.target.getAttribute('data-kill');
     if (!id) return;
     e.target.disabled = true;
@@ -230,9 +295,79 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
+interface Client {
+  res: ServerResponse;
+  cursor: number;
+  lastKey: string;
+}
+
 export function createDashboardServer(deps: DashboardDeps): Server {
   const now = deps.now ?? Date.now;
   const { db, config } = deps;
+
+  // One timer for every open dashboard, not one per connection: two tabs must
+  // not double the query rate. Each client keeps its own cursor.
+  const clients = new Set<Client>();
+  let timer: NodeJS.Timeout | null = null;
+
+  function withElapsed(task: TaskRollup) {
+    return { ...task, elapsedMs: now() - task.createdAt };
+  }
+
+  function snapshot(): unknown {
+    return {
+      type: 'state',
+      providers: Object.keys(config.providers).length,
+      tasks: taskRollup(db).map(withElapsed),
+      untracked: untrackedRollup(db),
+      feed: recentRequests(db, 200),
+    };
+  }
+
+  // Shared work once per tick: the task table and the untracked bucket are the
+  // same for every client. Per client, only the cursor moves.
+  function tick(): void {
+    if (clients.size === 0) return;
+    const tasks = taskRollup(db).map(withElapsed);
+    const untracked = untrackedRollup(db);
+    const shared = JSON.stringify([tasks, untracked]);
+
+    for (const client of clients) {
+      const fresh = requestsSince(db, client.cursor, 200);
+      if (fresh.length > 0) client.cursor += fresh.length;
+      // Terminal rows for entries the client still holds as `streaming`, so the
+      // feed does not lie about a request that already finished.
+      const settled = settledRequests(db, Math.max(0, client.cursor - 500), 200);
+      const key = JSON.stringify([shared, settled.map((r) => [r.id, r.status])]);
+      if (fresh.length === 0 && key === client.lastKey) continue;
+      client.lastKey = key;
+      client.res.write(
+        `data: ${JSON.stringify({ type: 'tick', tasks, untracked, feed: fresh, settled })}\n\n`,
+      );
+    }
+  }
+
+  function stream(res: ServerResponse): void {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    res.write(`data: ${JSON.stringify(snapshot())}\n\n`);
+
+    const client: Client = { res, cursor: maxSeq(db), lastKey: '' };
+    clients.add(client);
+    if (timer === null) timer = setInterval(tick, 250);
+
+    res.on('close', () => {
+      clients.delete(client);
+      if (clients.size === 0 && timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    });
+  }
 
   return createServer((req, res) => {
     const path = (req.url ?? '/').split('?')[0] ?? '/';
@@ -280,51 +415,4 @@ export function createDashboardServer(deps: DashboardDeps): Server {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(PAGE);
   });
-
-  function withElapsed(task: ReturnType<typeof taskRollup>[number]) {
-    return { ...task, elapsedMs: now() - task.createdAt };
-  }
-
-  function snapshot(): unknown {
-    return {
-      type: 'state',
-      providers: Object.keys(config.providers).length,
-      tasks: taskRollup(db).map(withElapsed),
-      untracked: untrackedRollup(db),
-      feed: recentRequests(db, 200),
-    };
-  }
-
-  function stream(res: ServerResponse): void {
-    res.writeHead(200, {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
-    });
-    res.write(`data: ${JSON.stringify(snapshot())}\n\n`);
-
-    let cursor = maxRowid(db);
-    let lastTasks = '';
-
-    // Server-side tick; the client never polls. 250ms keeps a new request under
-    // the one-second budget without hammering the DB.
-    const timer = setInterval(() => {
-      const fresh = requestsSince(db, cursor, 200);
-      if (fresh.length > 0) cursor += fresh.length;
-      // Terminal rows for entries the client still holds as `streaming`, so the
-      // feed does not lie about a request that already finished.
-      const settled = settledRequests(db, Math.max(0, cursor - 500), 200);
-      const tasks = taskRollup(db).map(withElapsed);
-      const untracked = untrackedRollup(db);
-      const key = JSON.stringify([tasks, untracked, settled.map((r) => [r.id, r.status])]);
-      if (fresh.length === 0 && key === lastTasks) return;
-      lastTasks = key;
-      res.write(
-        `data: ${JSON.stringify({ type: 'tick', tasks, untracked, feed: fresh, settled })}\n\n`,
-      );
-    }, 250);
-
-    res.on('close', () => clearInterval(timer));
-  }
 }

@@ -63,11 +63,23 @@ function migrate(db: Database.Database): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(dir, file), 'utf8');
-    const apply = db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(file, Date.now());
-    });
-    apply();
+    // Foreign keys go off for the duration: a migration that recreates a table
+    // (SQLite cannot add an AUTOINCREMENT column in place) drops the old one,
+    // which an enforcing FK would reject while children still point at it.
+    db.pragma('foreign_keys = OFF');
+    try {
+      const apply = db.transaction(() => {
+        db.exec(sql);
+        db.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(file, Date.now());
+      });
+      apply();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+    const broken = db.pragma('foreign_key_check') as unknown[];
+    if (broken.length > 0) {
+      throw new Error(`migration ${file} left foreign key violations: ${JSON.stringify(broken)}`);
+    }
   }
 }
 

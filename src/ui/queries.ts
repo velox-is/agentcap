@@ -114,30 +114,31 @@ function toFeed(row: Record<string, unknown>): FeedRow {
 }
 
 const FEED_SQL = `
-SELECT r.id, r.task_id, r.agent, r.model, r.ts, r.prompt_tokens, r.completion_tokens,
+SELECT r.seq, r.id, r.task_id, r.agent, r.model, r.ts, r.prompt_tokens, r.completion_tokens,
        r.est_cost, r.status, r.estimated,
        EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'unpriced_model') AS unpriced
   FROM requests r`;
 
 export function recentRequests(db: Database.Database, limit: number): FeedRow[] {
   const rows = db
-    .prepare(`${FEED_SQL} ORDER BY r.rowid DESC LIMIT ?`)
+    .prepare(`${FEED_SQL} ORDER BY r.seq DESC LIMIT ?`)
     .all(limit) as Record<string, unknown>[];
   return rows.map(toFeed);
 }
 
-// Cursor by rowid, not by timestamp: two requests in the same millisecond would
-// be skipped by a `ts > cursor` comparison, and insert order is what the feed is
-// actually showing anyway.
-export function maxRowid(db: Database.Database): number {
-  const row = db.prepare('SELECT COALESCE(MAX(rowid), 0) AS n FROM requests').get() as { n: number };
+// Cursor by `seq`, not by timestamp and not by rowid. A timestamp cursor skips
+// two requests in the same millisecond; a rowid cursor skips rows as soon as
+// anything deletes the highest one, because plain rowid is reused. `seq` is
+// INTEGER PRIMARY KEY AUTOINCREMENT, so it never goes backwards.
+export function maxSeq(db: Database.Database): number {
+  const row = db.prepare('SELECT COALESCE(MAX(seq), 0) AS n FROM requests').get() as { n: number };
   return row.n;
 }
 
 // Rows after the cursor, oldest first so the client prepends in order.
 export function requestsSince(db: Database.Database, cursor: number, limit: number): FeedRow[] {
   const rows = db
-    .prepare(`${FEED_SQL} WHERE r.rowid > ? ORDER BY r.rowid ASC LIMIT ?`)
+    .prepare(`${FEED_SQL} WHERE r.seq > ? ORDER BY r.seq ASC LIMIT ?`)
     .all(cursor, limit) as Record<string, unknown>[];
   return rows.map(toFeed);
 }
@@ -148,7 +149,7 @@ export function requestsSince(db: Database.Database, cursor: number, limit: numb
 // keeps and merged by id there, so re-sending is harmless.
 export function settledRequests(db: Database.Database, floor: number, limit: number): FeedRow[] {
   const rows = db
-    .prepare(`${FEED_SQL} WHERE r.rowid > ? AND r.status != 'streaming' ORDER BY r.rowid ASC LIMIT ?`)
+    .prepare(`${FEED_SQL} WHERE r.seq > ? AND r.status != 'streaming' ORDER BY r.seq ASC LIMIT ?`)
     .all(floor, limit) as Record<string, unknown>[];
   return rows.map(toFeed);
 }

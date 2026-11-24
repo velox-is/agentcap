@@ -5,11 +5,31 @@
 // This drives Chrome over CDP instead, and pushes real proxy traffic between
 // frames so the GIF actually moves.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// CHROME_PATH wins, then the platform's usual locations. A docs script, so it
+// never blocks users — but it does block CI, so the failure names the override.
+function findChrome() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ].filter((c) => typeof c === 'string' && c !== '');
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `no Chrome found — set CHROME_PATH to a Chrome/Chromium binary (tried ${candidates.length} locations)`,
+  );
+}
+const CHROME = findChrome();
 const DASH = 'http://127.0.0.1:4102/';
 const PROXY = 'http://127.0.0.1:4100/v1/chat/completions';
 const FRAMES = 18;

@@ -33,7 +33,8 @@ describe('db', () => {
     openDb(path).close();
     const db = openDb(path);
     const count = db.prepare('SELECT count(*) AS n FROM _migrations').get() as { n: number };
-    expect(count.n).toBe(1);
+    // One per migration file, applied exactly once across opens.
+    expect(count.n).toBe(2);
     db.close();
   });
 
@@ -70,6 +71,45 @@ describe('db', () => {
     const db = freshDb();
     const task = createTask(db, 'x', {});
     expect(() => db.prepare("UPDATE tasks SET status = 'bogus' WHERE id = ?").run(task.id)).toThrow();
+    db.close();
+  });
+
+  it('gives requests a monotonic seq that is not reused after a delete', () => {
+    // The dashboard feed cursors on this. Plain rowid would be reused once the
+    // highest row is deleted, and the cursor would silently skip rows.
+    const db = freshDb();
+    db.prepare(
+      `INSERT INTO requests (id, task_id, agent, model, ts, status) VALUES ('a', NULL, 'x', 'm', 1, 'ok')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO requests (id, task_id, agent, model, ts, status) VALUES ('b', NULL, 'x', 'm', 2, 'ok')`,
+    ).run();
+    const before = db.prepare('SELECT MAX(seq) AS n FROM requests').get() as { n: number };
+    db.prepare("DELETE FROM requests WHERE id = 'b'").run();
+    db.prepare(
+      `INSERT INTO requests (id, task_id, agent, model, ts, status) VALUES ('c', NULL, 'x', 'm', 3, 'ok')`,
+    ).run();
+    const after = db.prepare("SELECT seq FROM requests WHERE id = 'c'").get() as { seq: number };
+    expect(after.seq).toBeGreaterThan(before.n);
+    db.close();
+  });
+
+  it('defaults source to proxy and accepts otel', () => {
+    const db = freshDb();
+    db.prepare(
+      `INSERT INTO requests (id, task_id, agent, model, ts, status) VALUES ('p', NULL, 'x', 'm', 1, 'ok')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO requests (id, task_id, agent, model, ts, status, source) VALUES ('o', NULL, 'x', 'm', 2, 'ok', 'otel')`,
+    ).run();
+    const rows = db.prepare('SELECT id, source FROM requests ORDER BY id').all() as {
+      id: string;
+      source: string;
+    }[];
+    expect(rows).toEqual([
+      { id: 'o', source: 'otel' },
+      { id: 'p', source: 'proxy' },
+    ]);
     db.close();
   });
 

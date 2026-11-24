@@ -40,15 +40,33 @@ function stmt(db: Database.Database, sql: string): Database.Statement {
   return prepared;
 }
 
+export type RequestSource = 'proxy' | 'otel';
+
 export function startRequest(
   db: Database.Database,
-  input: { id: string; taskId: string | null; agent: string; model: string; now: number },
+  input: {
+    id: string;
+    taskId: string | null;
+    agent: string;
+    model: string;
+    now: number;
+    source?: RequestSource;
+    status?: RequestStatus;
+  },
 ): void {
   stmt(
     db,
-    `INSERT INTO requests (id, task_id, agent, model, ts, status)
-     VALUES (?, ?, ?, ?, ?, 'streaming')`,
-  ).run(input.id, input.taskId, input.agent, input.model, input.now);
+    `INSERT INTO requests (id, task_id, agent, model, ts, status, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.id,
+    input.taskId,
+    input.agent,
+    input.model,
+    input.now,
+    input.status ?? 'streaming',
+    input.source ?? 'proxy',
+  );
 }
 
 export function finishRequest(db: Database.Database, id: string, patch: FinishPatch): void {
