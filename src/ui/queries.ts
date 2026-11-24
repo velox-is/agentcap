@@ -42,8 +42,11 @@ export interface FeedRow {
   status: string;
   estimated: number;
   unpriced: number;
-  // This row's usage arrived after its task was already dead.
+  // This row's usage arrived after its task was already dead, and how late it
+  // was in ms. `late` is 0/1; `lateAfterMs` is null when the exporter sent no
+  // end timestamp, which is a different fact from 0.
   late: number;
+  lateAfterMs: number | null;
 }
 
 interface TaskSqlRow {
@@ -133,6 +136,7 @@ function toFeed(row: Record<string, unknown>): FeedRow {
     estimated: Number(row.estimated),
     unpriced: Number(row.unpriced),
     late: Number(row.late),
+    lateAfterMs: row.late_after_ms === null ? null : Number(row.late_after_ms),
   };
 }
 
@@ -140,7 +144,9 @@ const FEED_SQL = `
 SELECT r.seq, r.id, r.task_id, r.agent, r.model, r.ts, r.prompt_tokens, r.completion_tokens,
        r.est_cost, r.status, r.estimated,
        EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'unpriced_model') AS unpriced,
-       EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'late_usage') AS late
+       EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'late_usage') AS late,
+       (SELECT json_extract(e.payload, '$.arrivedAfterMs') FROM events e
+         WHERE e.request_id = r.id AND e.type = 'late_usage' LIMIT 1) AS late_after_ms
   FROM requests r`;
 
 export function recentRequests(db: Database.Database, limit: number): FeedRow[] {
@@ -178,7 +184,7 @@ export function settledRequests(db: Database.Database, floor: number, limit: num
   return rows.map(toFeed);
 }
 
-export function killTask(db: Database.Database, id: string): boolean {
-  const info = db.prepare("UPDATE tasks SET status = 'killed' WHERE id = ?").run(id);
-  return info.changes > 0;
-}
+// Re-exported rather than reimplemented: the dashboard kill and `task kill` must
+// take the same path, including the first-write-wins breach_reason, or a click
+// would relabel a token breach as a manual kill.
+export { killTask } from '../store/requests.js';

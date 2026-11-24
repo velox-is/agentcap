@@ -15,7 +15,7 @@ import {
 } from '../store/requests.js';
 import { Accountant } from '../proxy/accounting.js';
 import { counterFor, release, type TaskCounter } from '../proxy/counter.js';
-import { exceeds, type BreachReason } from '../proxy/verdict.js';
+import { breachedCaps, type BreachReason } from '../proxy/verdict.js';
 import { ceilingPrice } from '../proxy/upstream.js';
 import { mapSpans, TracePayload, type SpanRecord } from './map.js';
 
@@ -30,6 +30,10 @@ export interface OtelDeps {
 const MAX_BODY = 1024 * 1024;
 
 const UNASSIGNED = 'unassigned';
+
+// Exporters already warned about a missing end timestamp. Once each, because a
+// silent `null` in every late_usage payload is easy to read as "instant".
+const warnedNoEnd = new Set<string>();
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
@@ -163,41 +167,59 @@ export function applySpan(deps: OtelDeps, span: SpanRecord): void {
       // separate questions: `reason` is why the task died (unchanged, first
       // write wins), and the rest describes the lateness itself — whether the
       // cap was accurate or whether these tokens pushed past it.
-      const totalsBefore = taskTotals(db, deadId);
+      const after = taskTotals(db, deadId);
+      const spanTokens = totals.promptTokens + totals.completionTokens;
+      // taskTotals has already been updated by this span, so back it out to get
+      // the state the cap was actually evaluated against.
+      const preTokens = Math.max(0, after.tokens - spanTokens);
+      const preUsd = Math.max(0, after.usd - accountant.cost);
       const deadStatus = readStatus(db, deadId) ?? 'stuck';
-      const wouldExceed =
-        exceeds(
-          {
-            maxTokens: task.max_tokens,
-            maxSteps: task.max_steps,
-            maxUsd: task.max_usd,
-            maxSeconds: task.max_seconds,
-          },
-          totalsBefore.tokens,
-          totalsBefore.usd,
-          taskSteps(db, deadId),
-          task.created_at,
-          now(),
-        );
+      const caps = {
+        maxTokens: task.max_tokens,
+        maxSteps: task.max_steps,
+        maxUsd: task.max_usd,
+        maxSeconds: task.max_seconds,
+      };
+      const at = now();
+      const steps = taskSteps(db, deadId);
+      // One warning per exporter, on the first span that arrives without an end
+      // timestamp. The exporter is the resource's service name.
+      if (span.endedAtMs === null && !warnedNoEnd.has(span.agent)) {
+        warnedNoEnd.add(span.agent);
+        addEvent(db, {
+          id: randomUUID(),
+          requestId,
+          type: 'otel_missing_end_time',
+          payload: { exporter: span.agent, span: span.spanId },
+          now: at,
+        });
+      }
+      // Attribute the cap these tokens crossed, not the first cap in priority
+      // order: a task already over max_tokens whose late tokens finally break
+      // max_usd has to report max_usd, or the case study reads backwards.
+      const alreadyOver = breachedCaps(caps, preTokens, preUsd, steps, task.created_at, at);
+      const nowOver = breachedCaps(caps, after.tokens, after.usd, steps, task.created_at, at);
+      const capCrossed = nowOver.find((cap) => !alreadyOver.includes(cap)) ?? null;
       addEvent(db, {
         id: randomUUID(),
         requestId,
         type: 'late_usage',
         payload: {
           reason: readBreachReason(db, deadId) ?? alreadyDead,
-          tokens: totals.promptTokens + totals.completionTokens,
+          tokens: spanTokens,
           source: 'otel',
           taskStatusAtArrival: deadStatus,
           currentVerdict: breach,
-          // Ingest time minus the span's own end, so a straggler is visible as a
-          // straggler rather than as a slow request. Zero when the exporter sent
-          // no end timestamp, because there is nothing to measure against.
+          // Ingest time minus the span's own end. Null when the exporter sent no
+          // end timestamp: "0 ms late" and "unknown" are different facts.
           arrivedAfterMs:
-            span.endedAtMs === null ? 0 : Math.max(0, Math.round(now() - span.endedAtMs)),
-          wouldExceed,
+            span.endedAtMs === null ? null : Math.max(0, Math.round(at - span.endedAtMs)),
+          wouldExceed: nowOver.length > 0,
+          capCrossed,
+          alreadyOver,
           span: span.spanId,
         },
-        now: now(),
+        now: at,
       });
     } else {
       addEvent(db, {

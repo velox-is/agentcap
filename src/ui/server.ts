@@ -236,7 +236,11 @@ const PAGE = String.raw`<!doctype html>
         '<td class="num">' + tokens(r.tokens, r.estimated === 1) + '</td>' +
         '<td class="num">' + usd(r.usd, r.unpriced === 1) + '</td>' +
         '<td class="status-' + esc(r.status) + '">' + esc(r.status) +
-          (r.late === 1 ? ' <span class="warn">late</span>' : '') + '</td>' +
+          (r.late === 1
+            ? ' <span class="warn">late' +
+              (r.lateAfterMs === null ? ' ?' : ' +' + Math.round(r.lateAfterMs / 1000) + 's') +
+              '</span>'
+            : '') + '</td>' +
         '<td class="dim">' + esc(r.taskId === null ? '—' : r.taskId.slice(0, 8)) + '</td>' +
         '</tr>';
     }

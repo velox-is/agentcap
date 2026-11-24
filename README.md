@@ -2,7 +2,7 @@
 
 Local-first observability and hard budget control for AI agents. Point any agent's base URL at the proxy and it is instrumented with no code change.
 
-![dashboard](docs/demo.gif)
+![dashboard](https://raw.githubusercontent.com/veloxis/agentcap/main/docs/demo.gif)
 
 ## What it does
 

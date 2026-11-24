@@ -11,7 +11,10 @@ await build({
   format: 'esm',
   target: 'node22',
   outfile: 'dist/cli.js',
-  external: ['better-sqlite3'],
+  // better-sqlite3 is native, so it can never be bundled. js-tiktoken is 5.6 MB
+  // of inlined rank tables; leaving it external keeps the tarball in the low
+  // hundreds of KB instead of 2.6 MB, and npm resolves it as a normal dependency.
+  external: ['better-sqlite3', 'js-tiktoken'],
   banner: { js: '#!/usr/bin/env node' },
   sourcemap: true,
 });

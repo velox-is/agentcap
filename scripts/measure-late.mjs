@@ -64,7 +64,13 @@ let boot = '';
 server.stdout.on('data', (d) => (boot += d));
 for (let i = 0; i < 60 && !boot.includes('dashboard'); i++) await sleep(200);
 
-const task = (await run(['task', 'new', '--name', 'measure', '--max-tokens', '100'])).out.trim();
+// Two caps on purpose. max_tokens trips first, so the task dies on it; max_usd
+// is set just above what the stream spends, so a later span is what finally
+// breaks it. That is the case where attributing "the first breached cap"
+// instead of "the cap these tokens crossed" reports the wrong thing.
+const task = (
+  await run(['task', 'new', '--name', 'measure', '--max-tokens', '100', '--max-usd', '0.0002'])
+).out.trim();
 
 const send = () =>
   fetch('http://127.0.0.1:4100/v1/chat/completions', {
@@ -149,6 +155,16 @@ await sleep(400);
 const state = await (await fetch('http://127.0.0.1:4102/api/state')).json();
 const row = state.tasks.find((t) => t.id === task);
 
+// Read the late_usage payloads straight out of the DB. The attribution fields are
+// the point of the run, so they are reported rather than inferred from totals.
+const { default: Database } = await import('better-sqlite3');
+const db = new Database(join(root, '.agentcap', 'agentcap.db'), { readonly: true });
+const late = db
+  .prepare("SELECT payload FROM events WHERE type = 'late_usage' ORDER BY ts, rowid")
+  .all()
+  .map((r) => JSON.parse(r.payload));
+db.close();
+
 console.log(
   JSON.stringify(
     {
@@ -161,6 +177,13 @@ console.log(
       tokensTotal: row?.tokens,
       lateTokens: row?.lateTokens,
       lateSpans: row?.lateSpans,
+      late: late.map((l) => ({
+        tokens: l.tokens,
+        wouldExceed: l.wouldExceed,
+        capCrossed: l.capCrossed,
+        alreadyOver: l.alreadyOver,
+        arrivedAfterMs: l.arrivedAfterMs,
+      })),
       steps: row?.steps,
       taskCount: state.tasks.length,
       untrackedSteps: state.untracked.steps,

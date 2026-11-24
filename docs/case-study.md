@@ -7,15 +7,21 @@ This is a run, not an illustration. `scripts/measure-late.mjs` starts the real C
 ## What the run produced
 
 ```
-cap                       100
+cap                       100 tokens, 0.0002 USD
 tokens at breach          210
 tokens that arrived late  1120   (3 spans)
 tokens total              1330
 task status               stuck
 breach_reason             max_tokens
+
+late span 1   420 tokens   capCrossed: null      alreadyOver: [max_tokens]
+late span 2   370 tokens   capCrossed: max_usd   alreadyOver: [max_tokens]
+late span 3   330 tokens   capCrossed: null      alreadyOver: [max_tokens, max_usd]
 ```
 
-Both numbers are reported because either alone is a lie. "Capped at 100" while 1,330 were spent is the honest headline; it is 13.3x the cap, and the task is `stuck` the whole way after 210.
+Both headline numbers are reported because either alone is a lie. "Capped at 100" while 1,330 were spent is the honest headline, and the task is `stuck` the whole way after 210.
+
+The three late spans are the interesting part. The task is already dead on `max_tokens` when they land, so a naive "which cap is breached?" answer says `max_tokens` every time. Span 2 is the one that actually breaks `max_usd`, and it is the only one that reports `max_usd`.
 
 ## Why it is 210 and not 100
 
@@ -23,7 +29,9 @@ The breach check does not run on every chunk. It runs every 4 chunks or every 25
 
 So the cap is a **boundary check, not a mid-token interrupt**: the frame that crosses 100 is delivered, the check fires at the next poll, and the stream closes. Here the mock streams cumulative usage 70 / 140 / 210 at 200 ms intervals, so two frames land inside the polling window and the breach is detected at 210.
 
-That is 110 tokens of overshoot, a little over one frame's worth. It is bounded by the polling window, not by a whole request, which is what the old per-request accumulator allowed.
+That is 110 tokens of overshoot, a little over one frame's worth — and the number that matters is the absolute one, not the 110%. Overshoot is bounded by **tokens per chunk × chunks per polling window (≤4)**, so it is flat in tokens regardless of cap size: about 140 tokens per 70-token chunk here, which is a scary 110% on a 100-token cap and roughly 0.1% on a 100,000-token one. A reader who sees only "cap 100, spent 210" concludes the cap is decorative. It is not; it is a boundary check with a fixed, measurable slack.
+
+The cap also cannot interrupt mid-chunk: the frame that crosses the limit is already delivered, so the check fires at the next poll and closes the stream. The alternative, a database read per chunk, buys precision the provider's own usage reporting does not have.
 
 ## Why 1120 tokens arrived after the task was dead
 
@@ -34,11 +42,11 @@ The old behaviour overloaded one field to answer two questions. `reason` said "w
 Now the questions are separate (D51, D52):
 
 - `tasks.breach_reason` is why the task died. Written once, at the moment it is first marked dead, `COALESCE`d so a later verdict cannot overwrite it.
-- The `late_usage` event describes the lateness: `tokens`, `source`, `taskStatusAtArrival`, `currentVerdict`, `arrivedAfterMs`, `wouldExceed`.
+- The `late_usage` event describes the lateness: `tokens`, `source`, `taskStatusAtArrival`, `currentVerdict`, `arrivedAfterMs`, `wouldExceed`, `capCrossed`, `alreadyOver`.
 
-`wouldExceed` is the one that answers whether the cap was accurate. It re-runs the cap comparison against the totals *before* the span landed, using a new `exceeds()` that skips the already-dead short-circuit. In this run it returns `max_tokens`, which says the tokens were genuinely over budget, not that a `max_seconds` kill got relabelled.
+`wouldExceed` and its two companions answer whether the cap was accurate. The naive version returned the first breached cap in priority order, which is backwards: a task already stuck on `max_tokens` whose late tokens finally break `max_usd` reported `max_tokens` again. So the comparison now returns the **set** of breached caps and diffs it against the set already breached before the span landed. The new member is the attribution — `capCrossed: "max_usd"`, `alreadyOver: ["max_tokens"]` — and `capCrossed` is `null` when these tokens cross nothing new.
 
-`arrivedAfterMs` is ingest time minus the span's own end timestamp. A span that sat in an exporter queue for four minutes looks like a straggler instead of a slow request.
+`arrivedAfterMs` is ingest time minus the span's own end timestamp, so a span that sat in an exporter queue for four minutes looks like a straggler instead of a slow request. It is `null`, not `0`, when the exporter sent no end timestamp — the dashboard renders `late ?` for that and an `otel_missing_end_time` event is logged once per exporter, because "instant" and "unknown" are different facts.
 
 ## What still holds
 
@@ -49,7 +57,9 @@ Now the questions are separate (D51, D52):
 
 ## The dashboard shows both numbers
 
-The task row renders `breach_reason` in the status column, and the token cell carries a `+N late` marker next to the total. The feed marks the late row `late`. The GIF in the README is a live capture of that state; it is a separate run, so its late count differs from the one measured above.
+The task row renders `breach_reason` in the status column, and the token cell carries a `+N late` marker next to the total. The feed marks the late row `late`, with the lag in seconds or `late ?` when the exporter sent no end timestamp.
+
+The GIF at the top of the README is a separate, illustrative run recorded with `scripts/gif-demo.mjs`, not the measurement above. Every number in this document comes from `scripts/measure-late.mjs`; the GIF only shows the shapes the dashboard renders.
 
 ## What this does not solve
 

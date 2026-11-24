@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import { createOtelServer } from '../src/otel/ingest.js';
+import { createDashboardServer } from '../src/ui/server.js';
 import { openDb, createTask, getTask } from '../src/store/db.js';
 import { ConfigSchema } from '../src/config.js';
 
@@ -24,7 +25,15 @@ async function boot() {
   const server = createOtelServer({ db, config });
   running.push(server);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  return { base: `http://127.0.0.1:${(server.address() as { port: number }).port}`, db };
+  // A dashboard too: the kill route lives there and must share the kill path.
+  const dash = createDashboardServer({ db, config });
+  running.push(dash);
+  await new Promise<void>((r) => dash.listen(0, '127.0.0.1', r));
+  return {
+    base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+    dashBase: `http://127.0.0.1:${(dash.address() as { port: number }).port}`,
+    db,
+  };
 }
 
 function body(taskId: string | null): string {
@@ -90,34 +99,87 @@ describe('otel ingest', () => {
     expect(events(h.db).some((e) => e.type === 'budget_breach')).toBe(true);
   });
 
-  it('applies late usage after a breach and marks it, rather than dropping it', async () => {
+  it('attributes the cap the late tokens crossed, not the first cap breached', async () => {
+    // A span breaches max_tokens, so the task is stuck on it. A later span does
+    // not break max_tokens any harder — it breaks max_usd. Reporting max_tokens
+    // for the second span would read backwards.
     const h = await boot();
-    const task = createTask(h.db, 'already-stuck', { maxTokens: 10 });
-    // Killed on max_usd, then a token-capped span arrives. The two reasons are
-    // different questions and the event has to keep them apart.
-    h.db
-      .prepare("UPDATE tasks SET status = 'stuck', breach_reason = 'max_usd' WHERE id = ?")
-      .run(task.id);
+    const task = createTask(h.db, 'crossing', { maxTokens: 100, maxUsd: 0.01 });
+
+    await post(h.base, body(task.id));
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_tokens');
+    // One fixture span costs 0.0087, still under the usd cap.
+    expect(getTask(h.db, task.id)?.status).toBe('stuck');
 
     expect((await post(h.base, body(task.id))).status).toBe(200);
 
-    const [row] = rows(h.db);
-    // Spend is still recorded even though the task was dead on arrival.
-    expect(row?.prompt_tokens).toBe(1200);
     const late = events(h.db).filter((e) => e.type === 'late_usage');
     expect(late).toHaveLength(1);
     expect(JSON.parse(late[0]!.payload)).toMatchObject({
       // why the task died, untouched
-      reason: 'max_usd',
+      reason: 'max_tokens',
       tokens: 1540,
       source: 'otel',
       taskStatusAtArrival: 'stuck',
-      // and the separate question: is the cap still accurate?
-      wouldExceed: 'max_tokens',
+      // the new information: these tokens crossed max_usd
+      wouldExceed: true,
+      capCrossed: 'max_usd',
+      alreadyOver: ['max_tokens'],
     });
-    // Not re-marked as a fresh breach, and the reason is not rewritten.
-    expect(events(h.db).some((e) => e.type === 'budget_breach')).toBe(false);
-    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_usd');
+    // Exactly one breach event: the first span's. The second is late_usage.
+    expect(events(h.db).filter((e) => e.type === 'budget_breach')).toHaveLength(1);
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_tokens');
+  });
+
+  it('keeps the original reason when a human kills an already-stuck task', async () => {
+    // A manual kill moves the status but must not relabel a token breach.
+    const h = await boot();
+    const task = createTask(h.db, 'then-killed', { maxTokens: 10 });
+
+    await post(h.base, body(task.id));
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_tokens');
+
+    expect((await fetch(`${h.dashBase}/api/tasks/${task.id}/kill`, { method: 'POST' })).status).toBe(200);
+    const after = getTask(h.db, task.id);
+    expect(after?.status).toBe('killed');
+    expect(after?.breach_reason).toBe('max_tokens');
+  });
+
+  it('reports no crossed cap when the late tokens cross nothing new', async () => {
+    const h = await boot();
+    const task = createTask(h.db, 'same-cap', { maxTokens: 100 });
+    await post(h.base, body(task.id));
+    await post(h.base, body(task.id));
+
+    const late = events(h.db).filter((e) => e.type === 'late_usage');
+    const payload = JSON.parse(late[0]!.payload) as {
+      capCrossed: string | null;
+      wouldExceed: boolean;
+      alreadyOver: string[];
+    };
+    expect(payload.capCrossed).toBeNull();
+    expect(payload.alreadyOver).toEqual(['max_tokens']);
+    expect(payload.wouldExceed).toBe(true);
+  });
+
+  it('reports arrivedAfterMs as null and warns once when the span has no end time', async () => {
+    const h = await boot();
+    const task = createTask(h.db, 'no-end', { maxTokens: 10 });
+    await post(h.base, body(task.id));
+
+    // Same span, endTimeUnixNano removed.
+    const noEnd = body(task.id).replace(/,?\s*"endTimeUnixNano": "[0-9]+"/, '');
+    await post(h.base, noEnd);
+    await post(h.base, noEnd);
+
+    const late = events(h.db).filter((e) => e.type === 'late_usage');
+    expect(late.length).toBeGreaterThanOrEqual(2);
+    for (const event of late) {
+      const payload = JSON.parse(event.payload) as { arrivedAfterMs: number | null };
+      expect(payload.arrivedAfterMs).toBeNull();
+    }
+    // Once per exporter, not once per span.
+    expect(events(h.db).filter((e) => e.type === 'otel_missing_end_time')).toHaveLength(1);
   });
 
   it('reports arrivedAfterMs for a straggler span', async () => {

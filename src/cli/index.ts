@@ -11,6 +11,7 @@ import {
   findProjectRoot,
   getTask,
 } from '../store/db.js';
+import { killTask } from '../store/requests.js';
 import { createProxyServer } from '../proxy/server.js';
 import { configureAsserts } from '../proxy/accounting.js';
 import { createOtelServer } from '../otel/ingest.js';
@@ -175,7 +176,7 @@ function cmdTaskKill(id: string): void {
     db.close();
     die(`no task ${id}`);
   }
-  db.prepare("UPDATE tasks SET status = 'killed' WHERE id = ?").run(id);
+  killTask(db, id);
   db.close();
   process.stdout.write(`killed ${id}\n`);
 }

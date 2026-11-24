@@ -35,10 +35,31 @@ export function evaluate(input: VerdictInput): BreachReason | null {
   );
 }
 
+// Every cap currently breached, not just the first in priority order. Late
+// usage needs the set: a task already over max_tokens whose late tokens finally
+// break max_usd must attribute max_usd, and a single first-match answer keeps
+// saying max_tokens. Order is priority order, so `exceeds` can take [0].
+export function breachedCaps(
+  caps: Caps,
+  taskTokens: number,
+  taskUsd: number,
+  steps: number,
+  taskStartedAt: number,
+  now: number,
+): BreachReason[] {
+  const out: BreachReason[] = [];
+  if (isSet(caps.maxTokens) && taskTokens >= caps.maxTokens) out.push('max_tokens');
+  if (isSet(caps.maxUsd) && taskUsd >= caps.maxUsd) out.push('max_usd');
+  if (isSet(caps.maxSteps) && steps > caps.maxSteps) out.push('max_steps');
+  if (isSet(caps.maxSeconds) && now - taskStartedAt >= caps.maxSeconds * 1000) {
+    out.push('max_seconds');
+  }
+  return out;
+}
+
 // The cap comparison alone, ignoring whether the task is already dead.
-// Late-usage reporting needs it: `evaluate` short-circuits to the death reason
-// for a task that is already dead, so it cannot say whether the tokens that
-// just arrived would have broken the cap by themselves.
+// `evaluate` short-circuits to the death reason for a dead task, so it cannot
+// say whether tokens that just arrived would have broken a cap by themselves.
 export function exceeds(
   caps: Caps,
   taskTokens: number,
@@ -47,11 +68,7 @@ export function exceeds(
   taskStartedAt: number,
   now: number,
 ): BreachReason | null {
-  if (isSet(caps.maxTokens) && taskTokens >= caps.maxTokens) return 'max_tokens';
-  if (isSet(caps.maxUsd) && taskUsd >= caps.maxUsd) return 'max_usd';
-  if (isSet(caps.maxSteps) && steps > caps.maxSteps) return 'max_steps';
-  if (isSet(caps.maxSeconds) && now - taskStartedAt >= caps.maxSeconds * 1000) return 'max_seconds';
-  return null;
+  return breachedCaps(caps, taskTokens, taskUsd, steps, taskStartedAt, now)[0] ?? null;
 }
 
 export function breachBody(taskId: string, reason: BreachReason): string {

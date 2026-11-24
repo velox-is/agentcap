@@ -154,6 +154,18 @@ export function markDead(
   ).run(status, reason, taskId);
 }
 
+// A manual kill. Unlike markDead it has no status guard — killing an already
+// stuck task must still move it to killed — but the reason stays first-write
+// wins, so a token breach does not get rewritten to 'killed' by the human who
+// stopped it afterwards.
+export function killTask(db: Database.Database, taskId: string): boolean {
+  const info = stmt(
+    db,
+    "UPDATE tasks SET status = 'killed', breach_reason = COALESCE(breach_reason, 'killed') WHERE id = ?",
+  ).run(taskId);
+  return info.changes > 0;
+}
+
 export function readBreachReason(
   db: Database.Database,
   taskId: string,
