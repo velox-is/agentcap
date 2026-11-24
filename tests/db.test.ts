@@ -1,8 +1,16 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createTask, getTask, openDb } from '../src/store/db.js';
+import {
+  NoProjectError,
+  createTask,
+  dbPath,
+  findProjectRoot,
+  getTask,
+  initDbPath,
+  openDb,
+} from '../src/store/db.js';
 
 function freshDb() {
   return openDb(join(mkdtempSync(join(tmpdir(), 'agentcap-db-')), 'test.db'));
@@ -69,5 +77,46 @@ describe('db', () => {
     const db = freshDb();
     expect(getTask(db, 'nope')).toBeUndefined();
     db.close();
+  });
+});
+
+describe('db path resolution', () => {
+  function project(): string {
+    const root = mkdtempSync(join(tmpdir(), 'agentcap-root-'));
+    mkdirSync(join(root, '.agentcap'), { recursive: true });
+    return root;
+  }
+
+  it('resolves the db from a nested subdirectory', () => {
+    const root = project();
+    const nested = join(root, 'a', 'b', 'c');
+    mkdirSync(nested, { recursive: true });
+    expect(findProjectRoot(nested)).toBe(root);
+    expect(dbPath(nested)).toBe(join(root, '.agentcap', 'agentcap.db'));
+  });
+
+  it('prefers the nearest project root', () => {
+    const root = project();
+    const inner = join(root, 'inner');
+    mkdirSync(join(inner, '.agentcap'), { recursive: true });
+    expect(findProjectRoot(inner)).toBe(inner);
+  });
+
+  it('refuses when there is no project root', () => {
+    const bare = mkdtempSync(join(tmpdir(), 'agentcap-bare-'));
+    expect(() => findProjectRoot(bare)).toThrow(NoProjectError);
+    expect(() => dbPath(bare)).toThrow(/agentcap init/);
+  });
+
+  it('init reuses the existing root rather than nesting a new one', () => {
+    const root = project();
+    const nested = join(root, 'deep');
+    mkdirSync(nested, { recursive: true });
+    expect(initDbPath(nested)).toBe(join(root, '.agentcap', 'agentcap.db'));
+  });
+
+  it('init targets where it is run when no root exists', () => {
+    const bare = mkdtempSync(join(tmpdir(), 'agentcap-bare-'));
+    expect(initDbPath(bare)).toBe(join(bare, '.agentcap', 'agentcap.db'));
   });
 });

@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -8,8 +8,38 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const DB_DIR = '.agentcap';
 export const DB_FILE = 'agentcap.db';
 
-export function dbPath(cwd: string = process.cwd()): string {
-  return join(cwd, DB_DIR, DB_FILE);
+export class NoProjectError extends Error {
+  constructor(start: string) {
+    super(`no ${DB_DIR}/ here or in any parent of ${start} — run: agentcap init`);
+    this.name = 'NoProjectError';
+  }
+}
+
+// Walk up until a .agentcap/ is found, like git finds .git. Refuse otherwise:
+// a silently different DB is the same failure class as an in-memory status map.
+export function findProjectRoot(start: string = process.cwd()): string {
+  let dir = resolve(start);
+  for (;;) {
+    if (existsSync(join(dir, DB_DIR))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) throw new NoProjectError(start);
+    dir = parent;
+  }
+}
+
+export function dbPath(start: string = process.cwd()): string {
+  return join(findProjectRoot(start), DB_DIR, DB_FILE);
+}
+
+// init creates .agentcap/ where it is run, unless a parent already has one.
+export function initDbPath(cwd: string = process.cwd()): string {
+  let root: string;
+  try {
+    root = findProjectRoot(cwd);
+  } catch {
+    root = resolve(cwd);
+  }
+  return join(root, DB_DIR, DB_FILE);
 }
 
 function migrationsDir(): string {
