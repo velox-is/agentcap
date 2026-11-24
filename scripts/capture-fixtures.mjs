@@ -108,6 +108,32 @@ const perChunk = [
 
 fixtures['anthropic-per-chunk-usage.sse'] = split(perChunk.join(''));
 
+// Provider restarts its count mid-stream (retry / new segment), and a frame
+// that carries only one usage field.
+const regress = [
+  `data: ${JSON.stringify({ choices: [{ delta: { content: 'a' } }], usage: { prompt_tokens: 10, completion_tokens: 10 } })}\n\n`,
+  `data: ${JSON.stringify({ choices: [{ delta: { content: 'b' } }], usage: { prompt_tokens: 10, completion_tokens: 3 } })}\n\n`,
+  `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { completion_tokens: 5 } })}\n\n`,
+  'data: [DONE]\n\n',
+];
+fixtures['openai-usage-regress.sse'] = split(regress.join(''));
+
+// Model switch mid-stream: fallback routing behind a proxy in front of a proxy.
+const switched = [
+  `data: ${JSON.stringify({ model: 'gpt-4o-mini', choices: [{ delta: { content: 'a' } }], usage: { prompt_tokens: 100, completion_tokens: 0 } })}\n\n`,
+  `data: ${JSON.stringify({ model: 'gpt-4o', choices: [{ delta: { content: 'b' } }], usage: { prompt_tokens: 200, completion_tokens: 0 } })}\n\n`,
+  'data: [DONE]\n\n',
+];
+fixtures['openai-model-switch.sse'] = split(switched.join(''));
+
+// Usage only in a trailer, after the terminal frame.
+const trailer = [
+  `data: ${JSON.stringify({ choices: [{ delta: { content: 'a' } }] })}\n\n`,
+  'data: [DONE]\n\n',
+  `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 44, completion_tokens: 6 } })}\n\n`,
+];
+fixtures['openai-usage-trailer.sse'] = split(trailer.join(''));
+
 const routes = new Map();
 for (const [name, parts] of Object.entries(fixtures)) routes.set(`/${name}`, sse(parts));
 routes.set('/slow', sse(split(openAi.join('')), 120));

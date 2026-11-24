@@ -1,0 +1,6 @@
+data: {"model":"gpt-4o-mini","choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":100,"completion_tokens":0}}
+
+data: {"model":"gpt-4o","choices":[{"delta":{"content":"b"}}],"usage":{"prompt_tokens":200,"completion_tokens":0}}
+
+data: [DONE]
+

@@ -1,0 +1,8 @@
+data: {"choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":10,"completion_tokens":10}}
+
+data: {"choices":[{"delta":{"content":"b"}}],"usage":{"prompt_tokens":10,"completion_tokens":3}}
+
+data: {"choices":[{"delta":{}}],"usage":{"completion_tokens":5}}
+
+data: [DONE]
+
