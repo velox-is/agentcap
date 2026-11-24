@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { existsSync } from 'node:fs';
 import { loadConfig, configPath, writeExampleConfig } from '../config.js';
-import { openDb, dbPath, createTask, getTask } from '../store/db.js';
+import { openDb, dbPath, initDbPath, createTask, getTask } from '../store/db.js';
 import { createProxyServer } from '../proxy/server.js';
 import { createOtelServer } from '../otel/ingest.js';
 import { createDashboardServer } from '../ui/server.js';
@@ -25,10 +25,26 @@ function listen(server: Server, port: number, label: string): Promise<void> {
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => {
       server.removeListener('error', reject);
+      try {
+        assertLoopback(server, port);
+      } catch (err) {
+        reject(err);
+        return;
+      }
       process.stdout.write(`  ${label}  http://127.0.0.1:${port}\n`);
       resolve();
     });
   });
+}
+
+// Config load already refuses a non-loopback bind, but that only checks a
+// string. This asserts what the kernel actually bound.
+function assertLoopback(server: Server, port: number): void {
+  const address = server.address();
+  if (address === null || typeof address === 'string' || address.address !== '127.0.0.1') {
+    const got = typeof address === 'string' ? address : JSON.stringify(address);
+    throw new Error(`:${port} bound to ${got} — expected 127.0.0.1`);
+  }
 }
 
 async function cmdInit(): Promise<void> {
@@ -41,15 +57,15 @@ async function cmdInit(): Promise<void> {
     providers: {},
     pricing: {},
   }, null, 2) + '\n', 'utf8'));
-  const db = openDb(dbPath());
-  db.close();
-  process.stdout.write(`wrote ${target}\nwrote ${example}\ncreated ${dbPath()}\nnext: agentcap start\n`);
+  const created = initDbPath();
+  openDb(created).close();
+  process.stdout.write(`wrote ${target}\nwrote ${example}\ncreated ${created}\nnext: agentcap start\n`);
 }
 
 async function cmdStart(): Promise<void> {
   const config = await loadConfig();
   const db = openDb(dbPath());
-  const servers = [createProxyServer(), createOtelServer(), createDashboardServer()];
+  const servers = [createProxyServer({ config, db }), createOtelServer(), createDashboardServer()];
 
   try {
     await listen(servers[0]!, config.ports.proxy, 'proxy    ');
