@@ -123,3 +123,18 @@ Admission computes `used + 1` and passes it into the counter, which never re-rea
 
 ## D32 — one proxy per project, enforced with a pid lock
 A second `agentcap start` on the same DB would half-enforce every cap, because each process holds its own in-memory counter. `.agentcap/lock` holds the pid; `start` refuses if the pid is alive and takes over if it is not, so a crash does not wedge the project. The lock is removed on exit. Multi-process remains unsupported in v0.1 — this converts a silent bug into a message.
+
+## D33 — segment state is an object, and the invariant is structural
+The invariant is: **`segment.prev` is a request-local total, never a task total.** Before this it held only by the type, and the type does not know where the number came from.
+Segment state now lives in one object (`segments.ts`) constructed once per request and held in the live map by request id, passed into `#sync` by reference. `#sync` therefore has no access to anything task-scoped except `counter.add()`, so the signature cannot drift into comparing against a task number. A restart replaces the object (`restartSegment`, `base: 0`) instead of mutating a field someone can forget.
+Three dev-only assertions in `#sync` enforce it at runtime: `activeRequests > 0` (a sync after settle is a bug), segment identity matches the map entry for that request id, and `seg.prev <= counter.tokens` (catches a task-scoped leak the moment it is introduced). They throw only outside production.
+The pinning test — two requests on one task, interleaved frames, a restart in each, asserting the task total equals the sum of per-request maxima — fails the day anyone shares one accumulator, which is worth more than the assertions.
+
+## D34 — the ceiling price is frozen at admission
+Resolved once per request, not per frame. A live lookup would let two concurrent requests price the same unknown model differently in the log, which makes the log unauditable. A config change still applies to the next request, so the behaviour wanted is kept without the inconsistency.
+
+## D35 — header usage is opt-in per provider
+`x-usage-*` is not a namespaced header; any proxy in the path can set it for unrelated reasons. A provider declares it: `headerUsage: { prompt: "<header>", completion: "<header>" }`. Absent means the header path never runs. An undeclared header is ignored, asserted by test.
+
+## D36 — `pricing.ts` and `segments.ts` split out of `accounting.ts`
+Pricing resolution and segment arithmetic are pure and independently testable; keeping them in the accountant pushed it toward 400 lines with one feature left to add. `accounting.ts` keeps the counter registry and the accountant class.
