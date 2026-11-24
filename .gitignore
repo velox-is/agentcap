@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.agentcap/
+agentcap.config.json
+*.log
+.DS_Store

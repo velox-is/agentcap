@@ -1,0 +1,37 @@
+{
+  "name": "agentcap",
+  "version": "0.1.0",
+  "description": "Local-first observability and budget control for AI agents",
+  "type": "module",
+  "bin": {
+    "agentcap": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "agentcap.config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "prepare": "npm run build"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
