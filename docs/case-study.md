@@ -29,7 +29,7 @@ The breach check does not run on every chunk. It runs every 4 chunks or every 25
 
 So the cap is a **boundary check, not a mid-token interrupt**: the frame that crosses 100 is delivered, the check fires at the next poll, and the stream closes. Here the mock streams cumulative usage 70 / 140 / 210 at 200 ms intervals, so two frames land inside the polling window and the breach is detected at 210.
 
-That is 110 tokens of overshoot, a little over one frame's worth — and the number that matters is the absolute one, not the 110%. Overshoot is bounded by **tokens per chunk × chunks per polling window (≤4)**, so it is flat in tokens regardless of cap size: about 140 tokens per 70-token chunk here, which is a scary 110% on a 100-token cap and roughly 0.1% on a 100,000-token one. A reader who sees only "cap 100, spent 210" concludes the cap is decorative. It is not; it is a boundary check with a fixed, measurable slack.
+That is 110 tokens of overshoot — and the number that matters is the absolute one, not the 110%. Overshoot is bounded by **tokens per chunk × chunks per polling window**: at this mock's 70-token chunks the ceiling is 280 tokens, and it is flat in tokens regardless of cap size. 110 tokens is a scary 110% on a 100-token cap and roughly 0.1% on a 100,000-token one. A reader who sees only "cap 100, spent 210" concludes the cap is decorative. It is not; it is a boundary check with a fixed, measurable slack that the polling interval sets and the cap size does not.
 
 The cap also cannot interrupt mid-chunk: the frame that crosses the limit is already delivered, so the check fires at the next poll and closes the stream. The alternative, a database read per chunk, buys precision the provider's own usage reporting does not have.
 

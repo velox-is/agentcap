@@ -23,8 +23,23 @@ Then point your agent at the proxy and give it a task:
 
 ```sh
 TASK=$(npx agentcap task new --name my-run --max-tokens 200000 --max-usd 2)
-export OPENAI_BASE_URL=http://127.0.0.1:4100/v1
-export OPENAI_AGENT_TASK=$TASK     # see "Attribution" below
+```
+
+The task travels in a header, so set it wherever your client sets headers:
+
+```sh
+# curl
+curl http://127.0.0.1:4100/v1/chat/completions \
+  -H "x-agentcap-task: $TASK" -H 'content-type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+```
+
+```js
+// OpenAI SDK
+const client = new OpenAI({
+  baseURL: 'http://127.0.0.1:4100/v1',
+  defaultHeaders: { 'x-agentcap-task': process.env.TASK },
+});
 ```
 
 Open <http://127.0.0.1:4102> for the live dashboard.
@@ -41,6 +56,8 @@ The task is passed in a header, because the path has to stay transparent:
 | `x-agentcap-agent` | label for the feed. Missing means `unassigned`. |
 
 Anything else is forwarded upstream untouched; `x-agentcap-*` is stripped.
+
+A tool that can only take a base URL and cannot set headers therefore runs unassigned. That is not silent: the dashboard keeps an always-rendered `untracked` row, so traffic you are paying for and not capping is visible rather than assumed absent.
 
 ## Caps
 
