@@ -82,6 +82,52 @@ for (let i = 0; i < 6; i++) {
   await new Promise((r) => setTimeout(r, 500));
 }
 
+// youtube-pipeline is now stuck on max_tokens. Report a span against it over
+// OTel: the spend is real, so it lands as a late_usage row with the task's own
+// breach_reason intact — the two numbers the case study needs.
+const otlp = (taskId, tokens) =>
+  fetch('http://127.0.0.1:4101/v1/traces', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      resourceSpans: [
+        {
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'claude-code' } },
+              { key: 'agentcap.task_id', value: { stringValue: taskId } },
+            ],
+          },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  traceId: 'a'.repeat(32),
+                  spanId: Math.random().toString(16).slice(2, 18).padEnd(16, '0'),
+                  name: 'anthropic.chat',
+                  startTimeUnixNano: String(Date.now() * 1e6 - 900_000_000),
+                  endTimeUnixNano: String(Date.now() * 1e6),
+                  attributes: [
+                    { key: 'gen_ai.system', value: { stringValue: 'anthropic' } },
+                    { key: 'gen_ai.request.model', value: { stringValue: 'demo-small' } },
+                    { key: 'gen_ai.usage.input_tokens', value: { intValue: String(tokens) } },
+                    { key: 'gen_ai.usage.output_tokens', value: { intValue: '60' } },
+                  ],
+                  status: { code: 1 },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+for (let i = 0; i < 3; i++) {
+  await otlp(yt, 260);
+  await new Promise((r) => setTimeout(r, 450));
+}
+
 process.stdout.write(`\nDEMO_ROOT=${root}\nYT=${yt}\nTRADE=${trade}\nDIGEST=${digest}\n`);
 
 const stop = () => {

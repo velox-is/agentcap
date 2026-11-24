@@ -150,6 +150,49 @@ for (let i = 0; i < FRAMES; i++) {
 // The still is taken after the traffic drains, so every row has its final
 // numbers instead of the zeros a streaming row carries.
 await sleep(2500);
+
+// One last late span, so a `late` row is the newest thing in the feed when the
+// still is taken. The task table alone is not enough — the reader should see
+// the straggler, not just its total.
+if (ytId !== null) {
+  await fetch('http://127.0.0.1:4101/v1/traces', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      resourceSpans: [
+        {
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'claude-code' } },
+              { key: 'agentcap.task_id', value: { stringValue: ytId } },
+            ],
+          },
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  traceId: 'b'.repeat(32),
+                  spanId: 'c'.repeat(16),
+                  name: 'anthropic.chat',
+                  startTimeUnixNano: String(Date.now() * 1e6 - 700_000_000),
+                  endTimeUnixNano: String(Date.now() * 1e6),
+                  attributes: [
+                    { key: 'gen_ai.request.model', value: { stringValue: 'demo-small' } },
+                    { key: 'gen_ai.usage.input_tokens', value: { intValue: '240' } },
+                    { key: 'gen_ai.usage.output_tokens', value: { intValue: '55' } },
+                  ],
+                  status: { code: 1 },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  await sleep(900);
+}
+
 await shoot('docs/dashboard.png');
 
 // 4. GIF.
