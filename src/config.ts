@@ -18,6 +18,9 @@ export const ProviderSchema = z.object({
   baseUrl: z.string().url(),
   apiKeyEnv: z.string().min(1),
   models: z.array(z.string().min(1)).min(1),
+  // Optional. Overrides path-based stream-shape detection for a proxy that
+  // serves an Anthropic-compatible API off a non-anthropic host, or vice versa.
+  shape: z.enum(['openai', 'anthropic']).optional(),
 });
 
 export const ConfigSchema = z.object({

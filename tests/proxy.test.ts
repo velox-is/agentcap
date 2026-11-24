@@ -246,6 +246,84 @@ describe('caps end to end', () => {
     const second = await h.request();
     expect(second.status).toBe(429);
   });
+
+  it('shares one counter across two concurrent requests on the same task', async () => {
+    // Both requests start with an empty task, so a per-request accumulator would
+    // let each burn a full 30 tokens against a 40 cap and never breach.
+    const h = await harness({ usage: { prompt_tokens: 20, completion_tokens: 10 }, caps: { maxTokens: 40 } });
+    const [a, b] = await Promise.all([h.request(), h.request()]);
+    const [bodyA, bodyB] = await Promise.all([a.text(), b.text()]);
+
+    const breached = [bodyA, bodyB].filter((body) => body.includes('budget_exceeded'));
+    expect(breached.length).toBeGreaterThanOrEqual(1);
+    // Combined burn is the shared figure: 2 x 30 = 60, and the counter sees it.
+    expect(getTask(h.db, h.taskId)?.status).toBe('stuck');
+  });
+});
+
+describe('admission', () => {
+  it('refuses a stuck task with the 429 body and burns nothing upstream', async () => {
+    const h = await harness({ words: 200, delayMs: 1, caps: { maxTokens: 6 } });
+    await (await h.request()).text();
+    const seenBefore = h.seen.length;
+
+    const res = await h.request();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({
+      error: 'budget_exceeded',
+      task: h.taskId,
+      reason: 'max_tokens',
+    });
+    // The refused request never reached the provider.
+    expect(h.seen.length).toBe(seenBefore);
+    expect(rows(h.db)).toHaveLength(1);
+  });
+
+  it('refuses a killed task before the stream starts', async () => {
+    const h = await harness({ words: 4, delayMs: 1 });
+    h.kill();
+    const res = await h.request();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: 'budget_exceeded', task: h.taskId, reason: 'killed' });
+    expect(h.seen).toHaveLength(0);
+  });
+
+  it('allows the step at the limit and refuses the one past it', async () => {
+    const h = await harness({ words: 3, delayMs: 1, caps: { maxSteps: 1 } });
+    const first = await h.request();
+    expect(first.status).toBe(200);
+    await first.text();
+
+    const second = await h.request();
+    expect(second.status).toBe(429);
+    expect(await second.json()).toMatchObject({ reason: 'max_steps' });
+    // Refused at admission, so no upstream call and no request row.
+    expect(h.seen).toHaveLength(1);
+    expect(rows(h.db)).toHaveLength(1);
+    expect(getTask(h.db, h.taskId)?.status).toBe('stuck');
+  });
+});
+
+describe('untracked traffic', () => {
+  it('logs a request with no task header as unassigned and uncapped', async () => {
+    const h = await harness({ words: 6, delayMs: 1, caps: { maxTokens: 2 } });
+    const res = await fetch(`${h.base}/v1/chat/completions`, {
+      method: 'POST',
+      body: JSON.stringify({ model: 'mock-1', stream: true }),
+    });
+    const body = await res.text();
+    expect(res.status).toBe(200);
+    expect(body).toContain('data: [DONE]');
+
+    const row = h.db.prepare('SELECT task_id, agent, status FROM requests').get() as {
+      task_id: string | null;
+      agent: string;
+      status: string;
+    };
+    expect(row.task_id).toBeNull();
+    expect(row.agent).toBe('unassigned');
+    expect(row.status).toBe('ok');
+  });
 });
 
 describe('kill switch', () => {
