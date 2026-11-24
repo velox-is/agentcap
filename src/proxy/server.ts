@@ -172,6 +172,12 @@ async function handle(
   // One counter per task, seeded from the DB once while it is live. Two
   // concurrent requests on the same task share it, so neither can overshoot the
   // cap by a whole request before the other notices.
+  //
+  // The ceiling price is resolved once, here at admission, and frozen onto the
+  // request: a per-frame lookup would let two requests price the same unknown
+  // model differently in the log. A config change still applies to the next
+  // request.
+  const ceiling = ceilingPrice(config.pricing);
   let counter: TaskCounter | null = null;
   if (task !== null) {
     const owned = task;
@@ -199,15 +205,15 @@ async function handle(
     });
     // Single writer: admission owns the number, the counter only reads it.
     counter.spend.steps = steps;
-    counter.enter();
   }
 
   const accountant = new Accountant({
     shape: provider.shape,
+    requestId,
     counter,
     model,
     pricing: config.pricing,
-    ceilingPrice: ceilingPrice(config),
+    ceilingPrice: ceiling,
     onUnpriced: (unknownModel) => {
       addEvent(db, {
         id: randomUUID(),
@@ -227,6 +233,9 @@ async function handle(
       });
     },
   });
+  // Registered before the first frame so #sync's segment-identity assertion
+  // holds from the very first call.
+  if (counter !== null) counter.enter(requestId, accountant.segment);
   accountant.seedPrompt(body);
 
   const headers = forwardHeaders(provider, req.headers);
@@ -240,7 +249,7 @@ async function handle(
     if (settled) return;
     settled = true;
     if (taskId !== null) {
-      counter?.leave();
+      counter?.leave(requestId);
       release(taskId);
     }
   };
@@ -249,8 +258,14 @@ async function handle(
     const status = up.statusCode ?? 502;
     const contentType = String(up.headers['content-type'] ?? '');
 
-    // Usage in response headers is authoritative and lands before any chunk.
-    accountant.applyUsage(numberHeader(up.headers['x-usage-prompt-tokens']), numberHeader(up.headers['x-usage-completion-tokens']));
+    // Usage in response headers is authoritative, but only where the provider
+    // declared it: an undeclared `x-usage-*` header is ignored.
+    if (provider.headerUsage !== null) {
+      accountant.applyUsage(
+        numberHeader(up.headers[provider.headerUsage.prompt]),
+        numberHeader(up.headers[provider.headerUsage.completion]),
+      );
+    }
 
     if (!contentType.includes('text/event-stream')) {
       void pipeJson(res, up, { db, requestId, status, startedAt, now, accountant, settle });

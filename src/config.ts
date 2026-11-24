@@ -14,6 +14,14 @@ export const PortsSchema = z
   })
   .default({ proxy: 4100, otel: 4101, dashboard: 4102 });
 
+// Usage in response headers is opt-in per provider: `x-usage-*` is not
+// namespaced, so any proxy in the path may set it for unrelated reasons. Absent
+// means the header path never runs for this provider.
+export const HeaderUsageSchema = z.object({
+  prompt: z.string().min(1),
+  completion: z.string().min(1),
+});
+
 export const ProviderSchema = z.object({
   baseUrl: z.string().url(),
   apiKeyEnv: z.string().min(1),
@@ -21,6 +29,7 @@ export const ProviderSchema = z.object({
   // Optional. Overrides path-based stream-shape detection for a proxy that
   // serves an Anthropic-compatible API off a non-anthropic host, or vice versa.
   shape: z.enum(['openai', 'anthropic']).optional(),
+  headerUsage: HeaderUsageSchema.optional(),
 });
 
 export const ConfigSchema = z.object({

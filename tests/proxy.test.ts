@@ -40,6 +40,9 @@ interface UpstreamOptions {
   dieAfter?: number;
   status?: number;
   contentType?: string;
+  // Extra response headers, e.g. an `x-usage-*` pair.
+  headers?: Record<string, string>;
+  headerUsage?: { prompt: string; completion: string };
 }
 
 async function upstream(opts: UpstreamOptions = {}) {
@@ -51,12 +54,13 @@ async function upstream(opts: UpstreamOptions = {}) {
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
       seen.push({ headers: req.headers, body: Buffer.concat(chunks).toString('utf8') });
+      const extra = opts.headers ?? {};
       if (opts.contentType !== undefined && !opts.contentType.includes('event-stream')) {
-        res.writeHead(opts.status ?? 200, { 'content-type': opts.contentType });
+        res.writeHead(opts.status ?? 200, { 'content-type': opts.contentType, ...extra });
         res.end(JSON.stringify({ usage: opts.usage ?? {} }));
         return;
       }
-      res.writeHead(opts.status ?? 200, { 'content-type': 'text/event-stream' });
+      res.writeHead(opts.status ?? 200, { 'content-type': 'text/event-stream', ...extra });
       let i = 0;
       const timer = setInterval(() => {
         if (opts.dieAfter !== undefined && i === opts.dieAfter) {
@@ -98,7 +102,12 @@ async function harness(opts: UpstreamOptions & { caps?: Record<string, number> }
 
   const config: Config = ConfigSchema.parse({
     providers: {
-      mock: { baseUrl: `http://127.0.0.1:${up.port}`, apiKeyEnv: 'AGENTCAP_E2E_KEY', models: ['mock-1'] },
+      mock: {
+        baseUrl: `http://127.0.0.1:${up.port}`,
+        apiKeyEnv: 'AGENTCAP_E2E_KEY',
+        models: ['mock-1'],
+        ...(opts.headerUsage === undefined ? {} : { headerUsage: opts.headerUsage }),
+      },
     },
     pricing: { 'mock-1': { in: 1, out: 1 } },
   });
@@ -174,6 +183,33 @@ describe('proxy passthrough', () => {
       body: JSON.stringify({ model: 'mock-1', stream: true }),
     }).then((r) => r.text());
     expect(h.seen).toHaveLength(1);
+  });
+
+  it('applies declared header usage before the first chunk', async () => {
+    const h = await harness({
+      words: 3,
+      delayMs: 1,
+      headers: { 'x-usage-prompt': '70', 'x-usage-completion': '5' },
+      headerUsage: { prompt: 'x-usage-prompt', completion: 'x-usage-completion' },
+    });
+    await (await h.request()).text();
+    const [row] = rows(h.db);
+    // Header usage is authoritative: the tokenizer estimate never gets used.
+    expect(row?.prompt_tokens).toBe(70);
+    expect(row?.completion_tokens).toBe(5);
+    expect(row?.estimated).toBe(0);
+  });
+
+  it('ignores an undeclared usage header', async () => {
+    const h = await harness({
+      words: 3,
+      delayMs: 1,
+      headers: { 'x-usage-prompt': '70', 'x-usage-completion': '5' },
+    });
+    await (await h.request()).text();
+    const [row] = rows(h.db);
+    expect(row?.prompt_tokens).not.toBe(70);
+    expect(row?.estimated).toBe(1);
   });
 
   it('marks a usage-less stream estimated', async () => {
