@@ -17,9 +17,16 @@ export const PortsSchema = z
 // Usage in response headers is opt-in per provider: `x-usage-*` is not
 // namespaced, so any proxy in the path may set it for unrelated reasons. Absent
 // means the header path never runs for this provider.
+// Header names are lowercased and hyphen-only. Node lowercases response header
+// keys, so a mixed-case declaration would silently never match; rejecting it at
+// load is one loud failure instead of one silent zero.
+const HeaderName = z
+  .string()
+  .regex(/^[a-z0-9-]+$/, 'header names must be lowercase a-z, 0-9 and hyphens');
+
 export const HeaderUsageSchema = z.object({
-  prompt: z.string().min(1),
-  completion: z.string().min(1),
+  prompt: HeaderName,
+  completion: HeaderName,
 });
 
 export const ProviderSchema = z.object({

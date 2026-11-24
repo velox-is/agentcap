@@ -12,6 +12,7 @@ import {
   getTask,
 } from '../store/db.js';
 import { createProxyServer } from '../proxy/server.js';
+import { configureAsserts } from '../proxy/accounting.js';
 import { createOtelServer } from '../otel/ingest.js';
 import { createDashboardServer } from '../ui/server.js';
 import type { Server } from 'node:http';
@@ -185,6 +186,8 @@ async function main(): Promise<void> {
       'max-steps': { type: 'string' },
       'max-usd': { type: 'string' },
       'max-seconds': { type: 'string' },
+      // Invariant assertions are on by default; this is the escape hatch.
+      'no-assert': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -195,6 +198,8 @@ async function main(): Promise<void> {
     process.stdout.write(USAGE);
     return;
   }
+
+  if (values['no-assert'] === true) configureAsserts(false);
 
   if (command === 'init') return cmdInit();
   if (command === 'start') return cmdStart();
