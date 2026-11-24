@@ -94,6 +94,20 @@ const fixtures = {
   'openai-truncated.sse': split(openAi.slice(0, 4).join('')),
 };
 
+// A provider that reports only per-frame output_tokens, never a running total.
+const perChunk = [
+  `event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 12 } } })}\n\n`,
+]
+  .concat(
+    [1, 2, 3, 4].map(
+      (n) =>
+        `event: message_delta\ndata: ${JSON.stringify({ type: 'message_delta', usage: { output_tokens: n } })}\n\n`,
+    ),
+  )
+  .concat(['event: message_stop\ndata: {"type":"message_stop"}\n\n']);
+
+fixtures['anthropic-per-chunk-usage.sse'] = split(perChunk.join(''));
+
 const routes = new Map();
 for (const [name, parts] of Object.entries(fixtures)) routes.set(`/${name}`, sse(parts));
 routes.set('/slow', sse(split(openAi.join('')), 120));
