@@ -4,3 +4,4 @@ dist/
 agentcap.config.json
 *.log
 .DS_Store
+*.tgz
