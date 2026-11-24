@@ -156,3 +156,24 @@ Two requests in the same millisecond were skipped by a `ts > cursor` comparison,
 
 ## D42 — `untracked` is a pseudo-row in the tasks table, always rendered
 Untracked traffic has no task row, and a bucket that only appears when non-empty is easy to miss. It is always present, marked `uncapped`, and sorted into the table by burn like any other row. Kill is absent for it because there is nothing to kill.
+
+## D43 — `seq INTEGER PRIMARY KEY AUTOINCREMENT` replaces rowid as the feed cursor
+Plain rowid is reused once the highest row is deleted, so a `rowid > cursor` comparison silently skips rows as soon as anything prunes. `seq` is a real AUTOINCREMENT column with the high-water mark kept in `sqlite_sequence`. Migration 002 recreates the table (SQLite cannot add one in place); migrations run with `foreign_keys = OFF` for the duration and `foreign_key_check` afterwards, because dropping a parent table is rejected while children still reference it.
+
+## D44 — task table renders the top 100 by burn, sorts at most every 2s, freezes on hover/focus
+At 50 tasks and a 250ms tick the table reordered faster than it could be read. Rows are capped at 100 with a `showing N of M by burn` line; ordering re-sorts at most every 2s; and ordering stops entirely while the pointer is over the table or a kill button has focus, otherwise the button moves out from under the cursor mid-click. Contents still merge on the tick that carries them — only order is throttled.
+
+## D45 — one broadcast timer for every open dashboard
+One interval per SSE connection meant two tabs doubled the query rate. A single shared timer serves all clients and is cleared when the last one disconnects; each client keeps its own cursor. Shared work (task table, untracked bucket) is computed once per tick.
+
+## D46 — OTel is OTLP/HTTP JSON only, spans only
+`application/json` or 415. No protobuf, no gRPC, no collector. Body cap 1 MB with 413. A span with no `gen_ai.request.model` is not an LLM call and is dropped; the remaining attributes are ignored rather than rejected, since exporters send far more than the mapped set and a strict schema would break on every SDK bump.
+
+## D47 — span usage applies whole, through the same counter, and late usage is kept
+A span is complete on arrival, so its usage is authoritative and whole rather than a delta — `applyUsage` is exactly that path. It goes through the same task counter as proxied traffic, so a task cannot escape a cap by reporting over OTel. If the cap already fired before the span landed, the spend is applied anyway and written as a `late_usage` event instead of a second breach. Latency comes from the span's own start/end nanos, never ingest wall clock, and the row is backdated to the span start so the feed orders it where it happened. A span naming an unknown task is recorded as `untracked`, not dropped.
+
+## D48 — `source` column, `proxy` by default
+The feed has to distinguish proxied traffic from reported traffic; they are not the same claim. The column defaults to `proxy`; OTel ingest writes `otel`.
+
+## D49 — the docs capture resolves `CHROME_PATH` first, then platform paths
+Headless `--screenshot` never fires on a page holding an open EventSource, so the capture drives Chrome over CDP instead. That made the hardcoded macOS bundle path a CI blocker: `CHROME_PATH` wins, then macOS, Linux and Windows standard locations, and the failure names `CHROME_PATH`.
