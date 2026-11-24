@@ -38,7 +38,7 @@ describe('servers', () => {
     const { config, db } = deps();
     const cases = [
       [() => createProxyServer({ config, db }), 'proxy'],
-      [() => createOtelServer(), 'otel'],
+      [() => createOtelServer({ config, db }), 'otel'],
       [() => createDashboardServer({ config, db }), 'dashboard'],
     ] as const;
     for (const [factory, service] of cases) {
@@ -59,8 +59,14 @@ describe('servers', () => {
   });
 
   it('otel accepts an OTLP post', async () => {
-    const res = await fetch(`${await boot(createOtelServer())}/v1/traces`, { method: 'POST', body: '{}' });
+    const { config, db } = deps();
+    const res = await fetch(`${await boot(createOtelServer({ config, db }))}/v1/traces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
     expect(res.status).toBe(200);
+    db.close();
   });
 
   it('otel 404s GET on an ingest path', async () => {

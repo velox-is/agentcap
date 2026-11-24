@@ -117,7 +117,7 @@ async function cmdStart(): Promise<void> {
   const db = openDb(dbPath(root));
   const servers = [
     createProxyServer({ config, db }),
-    createOtelServer(),
+    createOtelServer({ config, db }),
     createDashboardServer({ config, db }),
   ];
 
