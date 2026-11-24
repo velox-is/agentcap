@@ -7,6 +7,7 @@ import {
   maxRowid,
   recentRequests,
   requestsSince,
+  settledRequests,
   taskRollup,
   untrackedRollup,
 } from './queries.js';
@@ -93,7 +94,7 @@ const PAGE = String.raw`<!doctype html>
   function tokens(n, est) { return (est ? '~' : '') + n.toLocaleString(); }
   function usd(v, unpriced) {
     if (unpriced) return '!';
-    return (v === 0 ? '' : '$') + (v === 0 ? '0.0000' : v.toFixed(4));
+    return '$' + v.toFixed(4);
   }
   function elapsed(ms) {
     var s = Math.max(0, Math.round(ms / 1000));
@@ -195,6 +196,16 @@ const PAGE = String.raw`<!doctype html>
       taskRows = msg.tasks;
       untracked = msg.untracked;
       if (msg.feed.length > 0) addFeed(msg.feed);
+      // Merge terminal rows into entries we already hold, by id: the feed is
+      // insert-driven, so a finished request needs its status overwritten.
+      if (msg.settled && msg.settled.length > 0) {
+        for (var s = 0; s < msg.settled.length; s++) {
+          var row = msg.settled[s];
+          for (var f = 0; f < feed.length; f++) {
+            if (feed[f].id === row.id) { feed[f] = row; break; }
+          }
+        }
+      }
     }
     render();
   }
@@ -301,12 +312,17 @@ export function createDashboardServer(deps: DashboardDeps): Server {
     const timer = setInterval(() => {
       const fresh = requestsSince(db, cursor, 200);
       if (fresh.length > 0) cursor += fresh.length;
+      // Terminal rows for entries the client still holds as `streaming`, so the
+      // feed does not lie about a request that already finished.
+      const settled = settledRequests(db, Math.max(0, cursor - 500), 200);
       const tasks = taskRollup(db).map(withElapsed);
       const untracked = untrackedRollup(db);
-      const key = JSON.stringify([tasks, untracked]);
+      const key = JSON.stringify([tasks, untracked, settled.map((r) => [r.id, r.status])]);
       if (fresh.length === 0 && key === lastTasks) return;
       lastTasks = key;
-      res.write(`data: ${JSON.stringify({ type: 'tick', tasks, untracked, feed: fresh })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({ type: 'tick', tasks, untracked, feed: fresh, settled })}\n\n`,
+      );
     }, 250);
 
     res.on('close', () => clearInterval(timer));

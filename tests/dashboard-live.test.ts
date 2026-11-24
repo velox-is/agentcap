@@ -121,4 +121,32 @@ describe('dashboard live', () => {
     expect(Date.now() - started).toBeLessThan(1000);
     ac.abort();
   });
+
+  it('sends the settled status for a request the feed already showed as streaming', async () => {
+    // The feed is insert-driven, so without this a completed request reads
+    // "streaming" forever in the client.
+    const h = await boot();
+    const ac = new AbortController();
+    closers.push(() => ac.abort());
+
+    const res = await fetch(`${h.dashBase}/api/stream`, { signal: ac.signal });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    await reader.read();
+
+    const started = Date.now();
+    await h.send();
+
+    let seen = '';
+    while (!seen.includes('"settled"') && Date.now() - started < 2000) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      seen += decoder.decode(chunk.value);
+    }
+
+    // The settled row carries a terminal status, not `streaming`.
+    expect(seen).toContain('"settled"');
+    expect(seen).toMatch(/"status":"(ok|upstream_error|client_gone)"/);
+    ac.abort();
+  });
 });

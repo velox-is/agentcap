@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "assets",
+    "docs",
     "agentcap.config.example.json",
     "README.md",
     "LICENSE"

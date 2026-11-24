@@ -142,6 +142,17 @@ export function requestsSince(db: Database.Database, cursor: number, limit: numb
   return rows.map(toFeed);
 }
 
+// Rows that finished but whose feed entry the client still holds as
+// `streaming`. The feed is built from inserts, so without this a completed
+// request would read "streaming" forever. Bounded to the window the client
+// keeps and merged by id there, so re-sending is harmless.
+export function settledRequests(db: Database.Database, floor: number, limit: number): FeedRow[] {
+  const rows = db
+    .prepare(`${FEED_SQL} WHERE r.rowid > ? AND r.status != 'streaming' ORDER BY r.rowid ASC LIMIT ?`)
+    .all(floor, limit) as Record<string, unknown>[];
+  return rows.map(toFeed);
+}
+
 export function killTask(db: Database.Database, id: string): boolean {
   const info = db.prepare("UPDATE tasks SET status = 'killed' WHERE id = ?").run(id);
   return info.changes > 0;
