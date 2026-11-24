@@ -8,8 +8,10 @@
   },
   "files": [
     "dist",
+    "!dist/cli.js.map",
     "assets",
-    "docs",
+    "docs/dashboard.png",
+    "docs/demo.gif",
     "agentcap.config.example.json",
     "README.md",
     "LICENSE"

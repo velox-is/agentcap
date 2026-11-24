@@ -6,13 +6,16 @@ import { getTask } from '../store/db.js';
 import {
   addEvent,
   finishRequest,
+  markDead,
+  readBreachReason,
   readStatus,
-  setStatus,
   startRequest,
   taskSteps,
+  taskTotals,
 } from '../store/requests.js';
 import { Accountant } from '../proxy/accounting.js';
 import { counterFor, release, type TaskCounter } from '../proxy/counter.js';
+import { exceeds, type BreachReason } from '../proxy/verdict.js';
 import { ceilingPrice } from '../proxy/upstream.js';
 import { mapSpans, TracePayload, type SpanRecord } from './map.js';
 
@@ -101,7 +104,9 @@ export function applySpan(deps: OtelDeps, span: SpanRecord): void {
       dead: () => {
         const status = readStatus(db, owned.id);
         if (status === 'killed') return 'killed';
-        if (status === 'stuck') return 'max_tokens';
+        if (status === 'stuck') {
+          return (readBreachReason(db, owned.id) as BreachReason) ?? 'max_tokens';
+        }
         return null;
       },
     }));
@@ -150,18 +155,46 @@ export function applySpan(deps: OtelDeps, span: SpanRecord): void {
     estimated: totals.estimated,
   });
 
-  if (breach !== null && taskId !== null) {
+  if (breach !== null && task !== null) {
+    const deadId = task.id;
     if (alreadyDead !== null) {
-      // The cap already fired before this span reported. The spend is real, so
-      // it is applied anyway and marked, never dropped.
+      // The task was already dead when this span arrived. The spend is real, so
+      // it is applied anyway and marked, never dropped. The payload answers two
+      // separate questions: `reason` is why the task died (unchanged, first
+      // write wins), and the rest describes the lateness itself — whether the
+      // cap was accurate or whether these tokens pushed past it.
+      const totalsBefore = taskTotals(db, deadId);
+      const deadStatus = readStatus(db, deadId) ?? 'stuck';
+      const wouldExceed =
+        exceeds(
+          {
+            maxTokens: task.max_tokens,
+            maxSteps: task.max_steps,
+            maxUsd: task.max_usd,
+            maxSeconds: task.max_seconds,
+          },
+          totalsBefore.tokens,
+          totalsBefore.usd,
+          taskSteps(db, deadId),
+          task.created_at,
+          now(),
+        );
       addEvent(db, {
         id: randomUUID(),
         requestId,
         type: 'late_usage',
         payload: {
-          reason: breach,
-          promptTokens: totals.promptTokens,
-          completionTokens: totals.completionTokens,
+          reason: readBreachReason(db, deadId) ?? alreadyDead,
+          tokens: totals.promptTokens + totals.completionTokens,
+          source: 'otel',
+          taskStatusAtArrival: deadStatus,
+          currentVerdict: breach,
+          // Ingest time minus the span's own end, so a straggler is visible as a
+          // straggler rather than as a slow request. Zero when the exporter sent
+          // no end timestamp, because there is nothing to measure against.
+          arrivedAfterMs:
+            span.endedAtMs === null ? 0 : Math.max(0, Math.round(now() - span.endedAtMs)),
+          wouldExceed,
           span: span.spanId,
         },
         now: now(),
@@ -179,7 +212,7 @@ export function applySpan(deps: OtelDeps, span: SpanRecord): void {
         },
         now: now(),
       });
-      setStatus(db, taskId, breach === 'killed' ? 'killed' : 'stuck');
+      markDead(db, deadId, breach === 'killed' ? 'killed' : 'stuck', breach);
     }
   }
 

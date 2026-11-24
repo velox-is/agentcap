@@ -93,16 +93,59 @@ describe('otel ingest', () => {
   it('applies late usage after a breach and marks it, rather than dropping it', async () => {
     const h = await boot();
     const task = createTask(h.db, 'already-stuck', { maxTokens: 10 });
-    h.db.prepare("UPDATE tasks SET status = 'stuck' WHERE id = ?").run(task.id);
+    // Killed on max_usd, then a token-capped span arrives. The two reasons are
+    // different questions and the event has to keep them apart.
+    h.db
+      .prepare("UPDATE tasks SET status = 'stuck', breach_reason = 'max_usd' WHERE id = ?")
+      .run(task.id);
 
     expect((await post(h.base, body(task.id))).status).toBe(200);
 
     const [row] = rows(h.db);
     // Spend is still recorded even though the task was dead on arrival.
     expect(row?.prompt_tokens).toBe(1200);
-    expect(events(h.db).some((e) => e.type === 'late_usage')).toBe(true);
-    // Not re-marked as a fresh breach.
+    const late = events(h.db).filter((e) => e.type === 'late_usage');
+    expect(late).toHaveLength(1);
+    expect(JSON.parse(late[0]!.payload)).toMatchObject({
+      // why the task died, untouched
+      reason: 'max_usd',
+      tokens: 1540,
+      source: 'otel',
+      taskStatusAtArrival: 'stuck',
+      // and the separate question: is the cap still accurate?
+      wouldExceed: 'max_tokens',
+    });
+    // Not re-marked as a fresh breach, and the reason is not rewritten.
     expect(events(h.db).some((e) => e.type === 'budget_breach')).toBe(false);
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_usd');
+  });
+
+  it('reports arrivedAfterMs for a straggler span', async () => {
+    const h = await boot();
+    const task = createTask(h.db, 'straggler', { maxTokens: 10 });
+    h.db
+      .prepare("UPDATE tasks SET status = 'stuck', breach_reason = 'max_tokens' WHERE id = ?")
+      .run(task.id);
+
+    // The fixture span covers 1.25s; ingest later and the lag shows up.
+    await post(h.base, body(task.id));
+
+    const [late] = events(h.db).filter((e) => e.type === 'late_usage');
+    const payload = JSON.parse(late!.payload) as { arrivedAfterMs: number };
+    expect(payload.arrivedAfterMs).toBeGreaterThan(1000);
+  });
+
+  it('records breach_reason on a fresh breach and never rewrites it', async () => {
+    const h = await boot();
+    const task = createTask(h.db, 'reason', { maxTokens: 10 });
+
+    await post(h.base, body(task.id));
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_tokens');
+
+    // A second span while dead: late_usage, reason unchanged.
+    await post(h.base, body(task.id));
+    expect(getTask(h.db, task.id)?.breach_reason).toBe('max_tokens');
+    expect(events(h.db).some((e) => e.type === 'late_usage')).toBe(true);
   });
 
   it('files a span naming an unknown task as untracked, keeping the row', async () => {

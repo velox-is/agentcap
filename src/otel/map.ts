@@ -70,6 +70,9 @@ export interface SpanRecord {
   promptTokens: number | null;
   completionTokens: number | null;
   latencyMs: number;
+  // Wall-clock end of the span, when the exporter supplied one. Straggler
+  // detection needs it: ingest time minus this is how late the span arrived.
+  endedAtMs: number | null;
   failed: boolean;
 }
 
@@ -110,6 +113,7 @@ export function mapSpans(payload: TracePayload): SpanRecord[] {
           promptTokens: count(attr(span.attributes, 'gen_ai.usage.input_tokens')),
           completionTokens: count(attr(span.attributes, 'gen_ai.usage.output_tokens')),
           latencyMs,
+          endedAtMs: end === null ? null : Math.round(end / 1e6),
           failed: span.status?.code === 2,
         });
       }

@@ -34,7 +34,7 @@ describe('db', () => {
     const db = openDb(path);
     const count = db.prepare('SELECT count(*) AS n FROM _migrations').get() as { n: number };
     // One per migration file, applied exactly once across opens.
-    expect(count.n).toBe(2);
+    expect(count.n).toBe(3);
     db.close();
   });
 

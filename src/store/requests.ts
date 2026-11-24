@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { TaskRow } from './db.js';
+import type { BreachReason } from '../proxy/verdict.js';
 
 export type RequestStatus =
   | 'streaming'
@@ -133,4 +134,32 @@ export function setStatus(db: Database.Database, taskId: string, status: TaskRow
     'killed',
     'stuck',
   );
+}
+
+// Marks a task dead and records why. `breach_reason` is first-write-wins: a
+// later verdict must not rewrite the reason the task originally died, or a
+// max_seconds kill ends up reading as a token breach once more usage lands.
+// The status guard on setStatus already stops the status moving; this adds the
+// same guard to the reason.
+export function markDead(
+  db: Database.Database,
+  taskId: string,
+  status: 'stuck' | 'killed',
+  reason: BreachReason,
+): void {
+  stmt(
+    db,
+    `UPDATE tasks SET status = ?, breach_reason = COALESCE(breach_reason, ?)
+      WHERE id = ? AND status NOT IN ('killed', 'stuck')`,
+  ).run(status, reason, taskId);
+}
+
+export function readBreachReason(
+  db: Database.Database,
+  taskId: string,
+): string | undefined {
+  const row = stmt(db, 'SELECT breach_reason FROM tasks WHERE id = ?').get(taskId) as
+    | { breach_reason: string | null }
+    | undefined;
+  return row?.breach_reason ?? undefined;
 }

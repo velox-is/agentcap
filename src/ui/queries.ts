@@ -13,6 +13,14 @@ export interface TaskRollup {
   steps: number;
   estimated: number;
   unpriced: number;
+  // Which cap fired, or 'killed'. The reason a task stopped, as distinct from
+  // the verdict currently true of it.
+  breachReason: string | null;
+  // Tokens that arrived after the task was already dead, and how many spans
+  // they came in on. Both numbers matter: a task capped at 400 tokens that
+  // reports 3,000 late looks fine on the first number alone.
+  lateTokens: number;
+  lateSpans: number;
 }
 
 export interface UntrackedRollup {
@@ -34,6 +42,8 @@ export interface FeedRow {
   status: string;
   estimated: number;
   unpriced: number;
+  // This row's usage arrived after its task was already dead.
+  late: number;
 }
 
 interface TaskSqlRow {
@@ -41,15 +51,18 @@ interface TaskSqlRow {
   name: string;
   status: string;
   created_at: number;
+  breach_reason: string | null;
   tokens: number;
   usd: number;
   steps: number;
   estimated: number;
   unpriced: number;
+  late_tokens: number;
+  late_spans: number;
 }
 
 const TASK_SQL = `
-SELECT t.id, t.name, t.status, t.created_at,
+SELECT t.id, t.name, t.status, t.created_at, t.breach_reason,
        COALESCE(SUM(r.prompt_tokens + r.completion_tokens), 0) AS tokens,
        COALESCE(SUM(r.est_cost), 0) AS usd,
        COUNT(r.id) AS steps,
@@ -57,7 +70,13 @@ SELECT t.id, t.name, t.status, t.created_at,
        EXISTS (
          SELECT 1 FROM events e JOIN requests r2 ON r2.id = e.request_id
           WHERE r2.task_id = t.id AND e.type = 'unpriced_model'
-       ) AS unpriced
+       ) AS unpriced,
+       COALESCE(SUM(CASE WHEN EXISTS (
+         SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'late_usage'
+       ) THEN r.prompt_tokens + r.completion_tokens ELSE 0 END), 0) AS late_tokens,
+       COALESCE(SUM(CASE WHEN EXISTS (
+         SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'late_usage'
+       ) THEN 1 ELSE 0 END), 0) AS late_spans
   FROM tasks t LEFT JOIN requests r ON r.task_id = t.id
  GROUP BY t.id`;
 
@@ -78,6 +97,9 @@ export function taskRollup(db: Database.Database): TaskRollup[] {
       steps: row.steps,
       estimated: row.estimated,
       unpriced: row.unpriced,
+      breachReason: row.breach_reason,
+      lateTokens: row.late_tokens,
+      lateSpans: row.late_spans,
     };
   });
 }
@@ -110,13 +132,15 @@ function toFeed(row: Record<string, unknown>): FeedRow {
     status: String(row.status),
     estimated: Number(row.estimated),
     unpriced: Number(row.unpriced),
+    late: Number(row.late),
   };
 }
 
 const FEED_SQL = `
 SELECT r.seq, r.id, r.task_id, r.agent, r.model, r.ts, r.prompt_tokens, r.completion_tokens,
        r.est_cost, r.status, r.estimated,
-       EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'unpriced_model') AS unpriced
+       EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'unpriced_model') AS unpriced,
+       EXISTS (SELECT 1 FROM events e WHERE e.request_id = r.id AND e.type = 'late_usage') AS late
   FROM requests r`;
 
 export function recentRequests(db: Database.Database, limit: number): FeedRow[] {

@@ -7,6 +7,8 @@ import { getTask, type TaskRow } from '../store/db.js';
 import {
   addEvent,
   finishRequest,
+  markDead,
+  readBreachReason,
   readStatus,
   setStatus,
   startRequest,
@@ -94,7 +96,9 @@ function admit(
   };
 
   if (task.status === 'killed') return refuse('killed');
-  if (task.status === 'stuck') return refuse('max_tokens');
+  // The recorded reason, not a guess: a task stuck on max_usd must not be
+  // reported as a token breach to the next caller.
+  if (task.status === 'stuck') return refuse((readBreachReason(db, task.id) as BreachReason) ?? 'max_tokens');
 
   // Cost is incurred per request, so the ceiling is denominated in the same
   // unit: max_steps 1 permits exactly one request. Refused before the row
@@ -108,7 +112,7 @@ function admit(
       payload: { reason: 'max_steps', refusedAtAdmission: true, steps: used },
       now: Date.now(),
     });
-    setStatus(db, task.id, 'stuck');
+    markDead(db, task.id, 'stuck', 'max_steps');
     return refuse('max_steps');
   }
 
@@ -204,7 +208,11 @@ async function handle(
         dead: () => {
           const status = readStatus(db, owned.id);
           if (status === 'killed') return 'killed';
-          if (status === 'stuck') return 'max_tokens';
+          // The recorded reason, not a guess: a task stuck on max_usd must not
+          // read as a token breach on the next chunk.
+          if (status === 'stuck') {
+            return (readBreachReason(db, owned.id) as BreachReason) ?? 'max_tokens';
+          }
           return null;
         },
       };
@@ -327,7 +335,9 @@ async function handle(
           },
           now: now(),
         });
-        if (taskId !== null) setStatus(db, taskId, breach === 'killed' ? 'killed' : 'stuck');
+        if (taskId !== null) {
+          markDead(db, taskId, breach === 'killed' ? 'killed' : 'stuck', breach);
+        }
       }
 
       finishRequest(db, requestId, {

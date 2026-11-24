@@ -50,12 +50,22 @@ function migrationsDir(): string {
   throw new Error(`migrations directory not found (looked in ${candidates.join(', ')})`);
 }
 
-function migrate(db: Database.Database): void {
+// Order matters and is not stylistic:
+//
+//   read pragma -> foreign_keys = OFF -> BEGIN IMMEDIATE -> ... -> COMMIT
+//   -> foreign_key_check (throw on any row) -> restore the previous pragma
+//
+// `PRAGMA foreign_keys` is per-connection and silently ignored inside a
+// transaction, so setting it after BEGIN looks correct and does nothing: the
+// DROP of a referenced parent is then rejected, and only on a DB that has rows.
+// `foreign_key_check` reports rather than aborts, so its result has to be
+// thrown by hand. BEGIN IMMEDIATE because `task` and `init` open the same file
+// and a deferred transaction can deadlock with the proxy holding the write lock.
+export function migrate(db: Database.Database, dir: string = migrationsDir()): void {
   db.exec('CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
   const applied = new Set(
     db.prepare('SELECT name FROM _migrations').all().map((row) => (row as { name: string }).name),
   );
-  const dir = migrationsDir();
   const files = readdirSync(dir)
     .filter((file) => file.endsWith('.sql'))
     .sort();
@@ -63,19 +73,22 @@ function migrate(db: Database.Database): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(dir, file), 'utf8');
-    // Foreign keys go off for the duration: a migration that recreates a table
-    // (SQLite cannot add an AUTOINCREMENT column in place) drops the old one,
-    // which an enforcing FK would reject while children still point at it.
+
+    const previous = db.pragma('foreign_keys', { simple: true }) as number;
+    // Outside any transaction, which is the only place it takes effect.
     db.pragma('foreign_keys = OFF');
     try {
       const apply = db.transaction(() => {
         db.exec(sql);
         db.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(file, Date.now());
+        db.pragma(`user_version = ${Number(file.slice(0, 3))}`);
       });
-      apply();
+      apply.immediate();
     } finally {
-      db.pragma('foreign_keys = ON');
+      // Restore what the caller had, not a hardcoded ON.
+      db.pragma(`foreign_keys = ${previous === 0 ? 'OFF' : 'ON'}`);
     }
+
     const broken = db.pragma('foreign_key_check') as unknown[];
     if (broken.length > 0) {
       throw new Error(`migration ${file} left foreign key violations: ${JSON.stringify(broken)}`);
@@ -104,6 +117,8 @@ export interface TaskRow {
   max_steps: number | null;
   max_usd: number | null;
   max_seconds: number | null;
+  // Which cap fired, or 'killed'. Set once, when the task is first marked dead.
+  breach_reason: string | null;
 }
 
 export interface NewTaskCaps {
@@ -123,6 +138,7 @@ export function createTask(db: Database.Database, name: string, caps: NewTaskCap
     max_steps: caps.maxSteps ?? null,
     max_usd: caps.maxUsd ?? null,
     max_seconds: caps.maxSeconds ?? null,
+    breach_reason: null,
   };
   db.prepare(
     `INSERT INTO tasks (id, name, status, created_at, max_tokens, max_steps, max_usd, max_seconds)

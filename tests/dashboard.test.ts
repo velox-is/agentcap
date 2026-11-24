@@ -53,9 +53,19 @@ function insertRequest(
 
 interface State {
   providers: number;
-  tasks: { id: string; tokens: number; usd: number; steps: number; estimated: number; elapsedMs: number }[];
+  tasks: {
+    id: string;
+    tokens: number;
+    usd: number;
+    steps: number;
+    estimated: number;
+    elapsedMs: number;
+    breachReason: string | null;
+    lateTokens: number;
+    lateSpans: number;
+  }[];
   untracked: { tokens: number; usd: number; steps: number; estimated: number; unpriced: number };
-  feed: { id: string; taskId: string | null }[];
+  feed: { id: string; taskId: string | null; late: number }[];
 }
 
 describe('dashboard', () => {
@@ -101,6 +111,28 @@ describe('dashboard', () => {
     const state = (await (await fetch(`${base}/api/state`)).json()) as State;
     expect(state.tasks[0]?.estimated).toBe(1);
     expect(state.feed[0]).toMatchObject({ id: 'r1' });
+  });
+
+  it('carries the breach reason and the late total separately', async () => {
+    const { base, db } = await boot();
+    const task = createTask(db, 'capped', { maxTokens: 10 });
+    // Killed on time, not on tokens: the reason must survive as-is.
+    db.prepare("UPDATE tasks SET status = 'stuck', breach_reason = 'max_seconds' WHERE id = ?").run(
+      task.id,
+    );
+    insertRequest(db, { id: 'r1', taskId: task.id, tokens: 90, usd: 0.001, estimated: 0, ts: Date.now() });
+    db.prepare(
+      "INSERT INTO events (id, request_id, type, payload, ts) VALUES ('e1', 'r1', 'late_usage', '{}', 1)",
+    ).run();
+
+    const state = (await (await fetch(`${base}/api/state`)).json()) as State;
+    expect(state.tasks[0]).toMatchObject({
+      breachReason: 'max_seconds',
+      tokens: 90,
+      lateTokens: 90,
+      lateSpans: 1,
+    });
+    expect(state.feed[0]?.late).toBe(1);
   });
 
   it('kills a task over HTTP and reports an unknown one', async () => {

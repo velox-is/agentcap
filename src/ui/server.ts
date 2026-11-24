@@ -185,11 +185,16 @@ const PAGE = String.raw`<!doctype html>
       if (t === undefined) continue;
       var share = t.steps > 0 ? Math.round((t.estimated / t.steps) * 100) : 0;
       var dead = t.status === 'killed' || t.status === 'stuck';
+      // Why it stopped, not the verdict currently true of it: a task killed on
+      // max_seconds must not read as a token breach.
+      var why = dead ? (t.breachReason || t.status) : t.status;
       html += '<tr>' +
         '<td class="name">' + esc(t.name) + '</td>' +
-        '<td class="status-' + esc(t.status) + '">' + esc(t.status) + '</td>' +
+        '<td class="status-' + esc(t.status) + '">' + esc(why) + '</td>' +
         '<td class="num">' + tokens(t.tokens, share > 0) +
-          (share > 0 ? ' <span class="dim">est ' + share + '%</span>' : '') + '</td>' +
+          (share > 0 ? ' <span class="dim">est ' + share + '%</span>' : '') +
+          (t.lateTokens > 0 ? ' <span class="warn">+' + t.lateTokens.toLocaleString() +
+            ' late</span>' : '') + '</td>' +
         '<td class="num">' + usd(t.usd, t.unpriced > 0) + '</td>' +
         '<td class="num">' + t.steps + '</td>' +
         '<td class="num dim">' + elapsed(t.elapsedMs) + '</td>' +
@@ -230,7 +235,8 @@ const PAGE = String.raw`<!doctype html>
         '<td class="dim">' + esc(r.model) + '</td>' +
         '<td class="num">' + tokens(r.tokens, r.estimated === 1) + '</td>' +
         '<td class="num">' + usd(r.usd, r.unpriced === 1) + '</td>' +
-        '<td class="status-' + esc(r.status) + '">' + esc(r.status) + '</td>' +
+        '<td class="status-' + esc(r.status) + '">' + esc(r.status) +
+          (r.late === 1 ? ' <span class="warn">late</span>' : '') + '</td>' +
         '<td class="dim">' + esc(r.taskId === null ? '—' : r.taskId.slice(0, 8)) + '</td>' +
         '</tr>';
     }

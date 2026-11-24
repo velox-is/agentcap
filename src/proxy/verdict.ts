@@ -25,14 +25,32 @@ export interface VerdictInput {
 
 export function evaluate(input: VerdictInput): BreachReason | null {
   if (input.dead !== null) return input.dead;
-  const { caps } = input;
+  return exceeds(
+    input.caps,
+    input.taskTokens,
+    input.taskUsd,
+    input.steps,
+    input.taskStartedAt,
+    input.now,
+  );
+}
 
-  if (isSet(caps.maxTokens) && input.taskTokens >= caps.maxTokens) return 'max_tokens';
-  if (isSet(caps.maxUsd) && input.taskUsd >= caps.maxUsd) return 'max_usd';
-  if (isSet(caps.maxSteps) && input.steps > caps.maxSteps) return 'max_steps';
-  if (isSet(caps.maxSeconds) && input.now - input.taskStartedAt >= caps.maxSeconds * 1000) {
-    return 'max_seconds';
-  }
+// The cap comparison alone, ignoring whether the task is already dead.
+// Late-usage reporting needs it: `evaluate` short-circuits to the death reason
+// for a task that is already dead, so it cannot say whether the tokens that
+// just arrived would have broken the cap by themselves.
+export function exceeds(
+  caps: Caps,
+  taskTokens: number,
+  taskUsd: number,
+  steps: number,
+  taskStartedAt: number,
+  now: number,
+): BreachReason | null {
+  if (isSet(caps.maxTokens) && taskTokens >= caps.maxTokens) return 'max_tokens';
+  if (isSet(caps.maxUsd) && taskUsd >= caps.maxUsd) return 'max_usd';
+  if (isSet(caps.maxSteps) && steps > caps.maxSteps) return 'max_steps';
+  if (isSet(caps.maxSeconds) && now - taskStartedAt >= caps.maxSeconds * 1000) return 'max_seconds';
   return null;
 }
 
