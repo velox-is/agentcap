@@ -137,4 +137,22 @@ Resolved once per request, not per frame. A live lookup would let two concurrent
 `x-usage-*` is not a namespaced header; any proxy in the path can set it for unrelated reasons. A provider declares it: `headerUsage: { prompt: "<header>", completion: "<header>" }`. Absent means the header path never runs. An undeclared header is ignored, asserted by test.
 
 ## D36 — `pricing.ts` and `segments.ts` split out of `accounting.ts`
-Pricing resolution and segment arithmetic are pure and independently testable; keeping them in the accountant pushed it toward 400 lines with one feature left to add. `accounting.ts` keeps the counter registry and the accountant class.
+Pricing resolution and segment arithmetic are pure and independently testable; keeping them in the accountant pushed it toward 400 lines with one feature left to add. `accounting.ts` keeps the accountant class.
+
+## D37 — the counter registry lives in `counter.ts`
+The dashboard reads live counters for the feed, which is the pressure that would have pushed `accounting.ts` past 400. The registry (map, seed-once, evict-at-zero, `peek`) is now its own module and the accountant imports `TaskCounter` as a type only. Split made before any UI code was written.
+
+## D38 — invariant assertions default on, `--no-assert` opts out
+`NODE_ENV` was the wrong axis: a tool run from `npx` usually has it unset, so checks were on by accident for most users and off for exactly the people who set it. Three integer comparisons per frame is nothing against network latency. `configureAsserts(false)` via `agentcap start --no-assert` is the escape hatch.
+
+## D39 — header usage names are validated at load, unmatched headers warn once
+`^[a-z0-9-]+$`, because Node lowercases response header keys and a mixed-case declaration would silently never match — a loud load error beats a silent zero. A declared header that never appears is still ambiguous (typo, or a provider that stopped sending it), so the first request to a provider with a missing declared header writes one `header_usage_unmatched` event with the missing names. Once per provider, not once per request. Accounting stays safe either way: the estimate remains in place.
+
+## D40 — a hardcoded fallback ceiling, so an empty pricing table still caps
+`ceilingPrice({})` used to return null, which made cost 0, which meant `max_usd` could never fire — an unpriced-everything install was effectively uncapped. `FALLBACK_CEILING` (15/75 per Mtok) is returned when the table has no non-zero entry. Over-pricing an unknown model is the safe direction; free is not.
+
+## D41 — dashboard reads rowid, not timestamp, as its SSE cursor
+Two requests in the same millisecond were skipped by a `ts > cursor` comparison, which is a lost feed row. `rowid` is monotonic in insert order and is what the feed displays anyway. The client keeps a 500-row ring buffer; the server ticks at 250ms and only writes when something changed.
+
+## D42 — `untracked` is a pseudo-row in the tasks table, always rendered
+Untracked traffic has no task row, and a bucket that only appears when non-empty is easy to miss. It is always present, marked `uncapped`, and sorted into the table by burn like any other row. Kill is absent for it because there is nothing to kill.
