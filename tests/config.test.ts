@@ -51,4 +51,39 @@ describe('config', () => {
   it('reports bad JSON', async () => {
     await expect(loadConfig(dirWith('{'))).rejects.toThrow(/not valid JSON/);
   });
+
+  it('rejects an uppercase header usage name', async () => {
+    // Node lowercases response header keys, so a mixed-case declaration would
+    // silently never match. Reject at load instead.
+    const dir = dirWith(
+      JSON.stringify({
+        providers: {
+          x: {
+            baseUrl: 'http://a.b',
+            apiKeyEnv: 'K',
+            models: ['m'],
+            headerUsage: { prompt: 'X-Usage-Prompt', completion: 'x-usage-completion' },
+          },
+        },
+      }),
+    );
+    await expect(loadConfig(dir)).rejects.toThrow(/lowercase/);
+  });
+
+  it('accepts a lowercase header usage pair', async () => {
+    const dir = dirWith(
+      JSON.stringify({
+        providers: {
+          x: {
+            baseUrl: 'http://a.b',
+            apiKeyEnv: 'K',
+            models: ['m'],
+            headerUsage: { prompt: 'x-usage-prompt', completion: 'x-usage-completion' },
+          },
+        },
+      }),
+    );
+    const config = await loadConfig(dir);
+    expect(config.providers.x?.headerUsage?.prompt).toBe('x-usage-prompt');
+  });
 });

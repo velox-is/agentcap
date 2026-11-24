@@ -212,6 +212,26 @@ describe('proxy passthrough', () => {
     expect(row?.estimated).toBe(1);
   });
 
+  it('warns once when a declared usage header never appears', async () => {
+    // A typo'd declaration is otherwise silent: usage just never becomes
+    // authoritative. One event per provider, on the first unmatched response.
+    const h = await harness({
+      words: 3,
+      delayMs: 1,
+      headerUsage: { prompt: 'x-usage-prompt', completion: 'x-usage-completion' },
+    });
+    await (await h.request()).text();
+    await (await h.request()).text();
+    const warned = events(h.db).filter((e) => e.type === 'header_usage_unmatched');
+    expect(warned).toHaveLength(1);
+    expect(JSON.parse(warned[0]!.payload)).toMatchObject({
+      provider: 'mock',
+      missing: ['x-usage-prompt', 'x-usage-completion'],
+    });
+    // Accounting stays safe: the estimate remains in place.
+    expect(rows(h.db).every((r) => r.estimated === 1)).toBe(true);
+  });
+
   it('marks a usage-less stream estimated', async () => {
     const h = await harness();
     await (await h.request()).text();
