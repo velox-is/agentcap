@@ -3,23 +3,29 @@ export interface Price {
   out: number;
 }
 
+// Absolute fallback when the pricing table is empty. Without this an empty table
+// yields a null ceiling, cost stays 0, and the USD cap never fires — an
+// unpriced-everything install would be uncapped. Roughly a frontier model's
+// rate, so an unknown model is over-priced rather than free.
+export const FALLBACK_CEILING: Price = { in: 15, out: 75 };
+
 // The highest price in the table, used for any model it does not list. Pricing
 // an unknown model at zero would leave its budget unbounded, so the ceiling is
-// the safe default and the event log flags every use.
-export function ceilingPrice(pricing: Record<string, Price>): Price | null {
+// the safe default and the event log flags every use. Never returns null: an
+// empty table falls back to FALLBACK_CEILING.
+export function ceilingPrice(pricing: Record<string, Price>): Price {
   let inMax = 0;
   let outMax = 0;
-  let seen = false;
   for (const price of Object.values(pricing)) {
-    seen = true;
     if (price.in > inMax) inMax = price.in;
     if (price.out > outMax) outMax = price.out;
   }
-  return seen ? { in: inMax, out: outMax } : null;
+  if (inMax === 0 && outMax === 0) return FALLBACK_CEILING;
+  return { in: inMax, out: outMax };
 }
 
 export interface ResolvedPrice {
-  price: Price | null;
+  price: Price;
   ceiling: boolean;
 }
 
@@ -28,17 +34,15 @@ export interface ResolvedPrice {
 export function resolvePrice(
   model: string | null,
   pricing: Record<string, Price>,
-  ceiling: Price | null,
+  ceiling: Price,
 ): ResolvedPrice {
   if (model !== null) {
     const exact = pricing[model];
     if (exact !== undefined) return { price: exact, ceiling: false };
   }
-  if (ceiling !== null) return { price: ceiling, ceiling: true };
-  return { price: null, ceiling: true };
+  return { price: ceiling, ceiling: true };
 }
 
-export function costOf(promptTokens: number, completionTokens: number, price: Price | null): number {
-  if (price === null) return 0;
+export function costOf(promptTokens: number, completionTokens: number, price: Price): number {
   return (promptTokens / 1e6) * price.in + (completionTokens / 1e6) * price.out;
 }

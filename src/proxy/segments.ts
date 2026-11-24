@@ -4,7 +4,7 @@ import { costOf, type Price } from './pricing.js';
 // request total, never a task total, and a fresh object is the only way a
 // segment restarts (so `base` cannot be forgotten in a refactor).
 //
-// INVARIANT, enforced by the shape of #sync in accounting.ts: `prev` counts
+// INVARIANT, enforced by the shape of the accountant's sync: `prev` counts
 // within one request. The task-scoped number is only ever reached through
 // counter.add(). Anything that compares `prev` to a task total is a bug.
 export interface Segment {
@@ -14,7 +14,7 @@ export interface Segment {
   // Tokens already burned before this segment started (0 for the first).
   base: number;
   model: string | null;
-  price: Price | null;
+  price: Price;
   ceiling: boolean;
   // Cost already reported for this segment, for deltaing against.
   cost: number;
@@ -23,7 +23,7 @@ export interface Segment {
 export function startSegment(input: {
   requestId: string;
   model: string | null;
-  price: Price | null;
+  price: Price;
   ceiling: boolean;
 }): Segment {
   return {
@@ -42,7 +42,7 @@ export function startSegment(input: {
 // the new rate.
 export function restartSegment(
   segment: Segment,
-  input: { model: string | null; price: Price | null; ceiling: boolean; requestTotal: number },
+  input: { model: string | null; price: Price; ceiling: boolean; requestTotal: number },
 ): Segment {
   return {
     requestId: segment.requestId,
