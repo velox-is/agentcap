@@ -2,6 +2,8 @@ import { countText, countValue } from './tokens.js';
 import { SseParser, classify, serialize, type ParsedFrame, type StreamShape } from './sse.js';
 import { extractAnthropic, extractOpenAi, type FrameUsage } from './usage.js';
 import { evaluate, type BreachReason, type Caps } from './verdict.js';
+import { costOf, resolvePrice, type Price } from './pricing.js';
+import { advance, restartSegment, startSegment, type Segment } from './segments.js';
 
 // Caps are task-scoped, so the counter is too.
 //
@@ -13,7 +15,8 @@ import { evaluate, type BreachReason, type Caps } from './verdict.js';
 // mid-stream.
 //
 // So: one counter per task, seeded from the DB exactly once while it is live,
-// shared by every in-flight request, and only ever moved forward.
+// shared by every in-flight request, and only ever moved forward. Request-local
+// arithmetic lives entirely in segments.ts, which never sees a task total.
 
 export interface TaskSpend {
   tokens: number;
@@ -24,10 +27,7 @@ export interface TaskSpend {
   dead: () => BreachReason | null;
 }
 
-export interface Price {
-  in: number;
-  out: number;
-}
+export type { Price };
 
 export class TaskCounter {
   #tokens: number;
@@ -40,6 +40,9 @@ export class TaskCounter {
   // the cap.
   activeRequests = 0;
   breached = false;
+  // Live segments by request id. Lets #sync assert the segment it was handed is
+  // still the one this counter knows about.
+  segments = new Map<string, Segment>();
 
   constructor(spend: TaskSpend) {
     this.#spend = spend;
@@ -64,12 +67,14 @@ export class TaskCounter {
     if (usd > 0) this.#usd += usd;
   }
 
-  enter(): void {
+  enter(requestId: string, segment: Segment): void {
     this.activeRequests += 1;
+    this.segments.set(requestId, segment);
   }
 
-  leave(): void {
+  leave(requestId: string): void {
     this.activeRequests = Math.max(0, this.activeRequests - 1);
+    this.segments.delete(requestId);
   }
 }
 
@@ -104,6 +109,7 @@ export interface RegressInfo {
 
 export interface AccountingOptions {
   shape: StreamShape;
+  requestId: string;
   counter: TaskCounter | null;
   model?: string | null;
   pricing?: Record<string, Price>;
@@ -131,18 +137,13 @@ export interface Observation {
   malformed: number;
 }
 
-function resolvePrice(
-  model: string | null,
-  pricing: Record<string, Price>,
-  ceiling: Price | null,
-): { price: Price | null; flagged: boolean } {
-  if (model !== null) {
-    const exact = pricing[model];
-    if (exact !== undefined) return { price: exact, flagged: false };
+// Dev-only invariant checks. Silent in production: they must never throw at a
+// user, but they make a refactor that breaks the accounting contract fail
+// loudly in tests instead of quietly undercounting.
+function assert(condition: boolean, message: string): void {
+  if (!condition && process.env.NODE_ENV !== 'production') {
+    throw new Error(`accounting invariant: ${message}`);
   }
-  // Never price an unknown model at zero: zero is an unbounded budget.
-  if (ceiling !== null) return { price: ceiling, flagged: true };
-  return { price: null, flagged: true };
 }
 
 export class Accountant {
@@ -161,22 +162,24 @@ export class Accountant {
   #malformed = 0;
   #sawDone = false;
   #closed = false;
-  // Current pricing segment. A segment restarts on a model change or on a
-  // usage regression, and each one is priced separately.
-  #segBase = 0;
-  #segReported = 0;
-  #segCost = 0;
-  #segModel: string | null;
-  #segPrice: Price | null;
+  #segment: Segment;
   #totalCost = 0;
 
   constructor(opts: AccountingOptions) {
     this.#opts = opts;
     this.#count = opts.countText ?? countText;
-    this.#segModel = opts.model ?? null;
-    const resolved = resolvePrice(this.#segModel, opts.pricing ?? {}, opts.ceilingPrice ?? null);
-    this.#segPrice = resolved.price;
-    if (resolved.flagged) opts.onUnpriced?.(this.#segModel);
+    const resolved = resolvePrice(
+      opts.model ?? null,
+      opts.pricing ?? {},
+      opts.ceilingPrice ?? null,
+    );
+    this.#segment = startSegment({
+      requestId: opts.requestId,
+      model: opts.model ?? null,
+      price: resolved.price,
+      ceiling: resolved.ceiling,
+    });
+    if (resolved.ceiling) opts.onUnpriced?.(opts.model ?? null);
   }
 
   seedPrompt(payload: unknown): void {
@@ -206,7 +209,13 @@ export class Accountant {
   }
 
   get model(): string | null {
-    return this.#segModel;
+    return this.#segment.model;
+  }
+
+  // The live segment object, handed to the counter on enter so #sync can assert
+  // it is operating on the object that counter knows about.
+  get segment(): Segment {
+    return this.#segment;
   }
 
   // Cost accumulated by this request across every segment it spanned. Priced
@@ -275,7 +284,7 @@ export class Accountant {
     const usage: FrameUsage =
       this.#opts.shape === 'openai' ? extractOpenAi(frame.payload) : extractAnthropic(frame.payload);
 
-    if (usage.model !== null && usage.model !== this.#segModel) this.#switchModel(usage.model);
+    if (usage.model !== null && usage.model !== this.#segment.model) this.#switchModel(usage.model);
 
     if (usage.text !== '') {
       if (!this.#authCompletionSeen) this.#estCompletion += this.#count(usage.text);
@@ -291,69 +300,58 @@ export class Accountant {
     this.#sync();
   }
 
-  // New segment: price from here on, and treat the current request total as the
-  // baseline so already-counted tokens are not counted twice.
   #switchModel(model: string): void {
-    this.#segModel = model;
     const resolved = resolvePrice(model, this.#opts.pricing ?? {}, this.#opts.ceilingPrice ?? null);
-    this.#segPrice = resolved.price;
-    if (resolved.flagged) this.#opts.onUnpriced?.(model);
+    if (resolved.ceiling) this.#opts.onUnpriced?.(model);
     const totals = this.totals;
-    this.#segBase = totals.promptTokens + totals.completionTokens;
-    this.#segReported = 0;
-    // Tokens already burned are treated as paid for at the new price, so the
-    // switch itself adds no cost and only later tokens are priced at it.
-    const price = this.#segPrice;
-    this.#segCost =
-      price === null
-        ? 0
-        : (totals.promptTokens / 1e6) * price.in + (totals.completionTokens / 1e6) * price.out;
+    this.#segment = restartSegment(this.#segment, {
+      model,
+      price: resolved.price,
+      ceiling: resolved.ceiling,
+      requestTotal: totals.promptTokens + totals.completionTokens,
+    });
+    // Keep the counter's map pointing at the live segment object.
+    this.#opts.counter?.segments.set(this.#segment.requestId, this.#segment);
   }
 
   // Fully synchronous by design: the event loop is what makes a shared counter
   // safe without a lock. One await in here and two frames can interleave
   // mid-arithmetic.
   //
-  // A decrease means the provider restarted its count (new segment, retry,
-  // multi-message stream). Clamping to zero would silently discard the segment
-  // and undercount, which fires the cap late. So a decrease adds the new value
-  // wholesale: it can overcount on a spurious dip, which is the safe side.
+  // INVARIANT: `seg.prev` is a request-local total. The task-scoped number is
+  // reached only through counter.add() below, so a segment can never be walked
+  // backwards by another request's burn, and a restart resets `prev` to 0 on a
+  // fresh object instead of a field someone has to remember.
   #sync(): void {
     const counter = this.#opts.counter;
     if (counter === null) return;
 
-    const totals = this.totals;
-    const requestTotal = totals.promptTokens + totals.completionTokens;
-    let local = requestTotal - this.#segBase;
-    const restart = local < this.#segReported;
+    const seg = this.#segment;
+    assert(counter.activeRequests > 0, 'sync after settle');
+    assert(
+      counter.segments.get(seg.requestId) === seg,
+      'segment is not the live one for this request',
+    );
+    // A request-local `prev` can never exceed the task total, which already
+    // contains every request's burn. If it does, something is task-scoped.
+    assert(seg.prev <= counter.tokens, 'segment prev exceeds the task total');
 
-    if (restart) {
-      const previous = local;
-      this.#segBase = 0;
-      local = requestTotal;
-      this.#segReported = 0;
-      this.#segCost = 0;
-      this.#opts.onRegress?.({ previous, next: requestTotal });
+    const totals = this.totals;
+    const result = advance(
+      seg,
+      totals.promptTokens + totals.completionTokens,
+      totals.promptTokens,
+      totals.completionTokens,
+    );
+    this.#segment = result.next;
+    counter.segments.set(seg.requestId, this.#segment);
+
+    const { tokens, usd, regressed } = result.delta;
+    if (regressed) {
+      this.#opts.onRegress?.({ previous: seg.prev, next: this.#segment.prev });
     }
-
-    const delta = local - this.#segReported;
-    this.#segReported = local;
-    const cost = this.#segmentCost();
-    if (cost > 0) this.#totalCost += cost;
-    if (delta > 0 || cost > 0) counter.add(Math.max(0, delta), cost);
-  }
-
-  // Priced against the current segment's snapshot only, so a model switch
-  // mid-stream cannot price old tokens at the new rate or the reverse.
-  #segmentCost(): number {
-    const price = this.#segPrice;
-    if (price === null) return 0;
-    const totals = this.totals;
-    const cost =
-      (totals.promptTokens / 1e6) * price.in + (totals.completionTokens / 1e6) * price.out;
-    const delta = Math.max(0, cost - this.#segCost);
-    this.#segCost = cost;
-    return delta;
+    if (usd > 0) this.#totalCost += usd;
+    if (tokens > 0 || usd > 0) counter.add(tokens, usd);
   }
 
   #verdict(now: number): BreachReason | null {
@@ -371,3 +369,5 @@ export class Accountant {
     });
   }
 }
+
+export { costOf };

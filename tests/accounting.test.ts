@@ -54,9 +54,14 @@ interface AccOpts {
   onUnpriced?: (model: string | null) => void;
 }
 
+let reqSeq = 0;
+
 function accountantFor(c: TaskCounter | null, opts: AccOpts = {}) {
-  return new Accountant({
+  reqSeq += 1;
+  const requestId = `req-${reqSeq}`;
+  const acc = new Accountant({
     shape: opts.shape ?? 'openai',
+    requestId,
     counter: c,
     model: opts.model === undefined ? 'm1' : opts.model,
     pricing: opts.pricing ?? PRICING,
@@ -64,6 +69,9 @@ function accountantFor(c: TaskCounter | null, opts: AccOpts = {}) {
     onRegress: opts.onRegress,
     onUnpriced: opts.onUnpriced,
   });
+  // Mirror what the proxy does: register the segment before the first frame.
+  c?.enter(requestId, acc.segment);
+  return acc;
 }
 
 function drain(acc: Accountant, parts: string[]) {
@@ -265,15 +273,16 @@ describe('task counter', () => {
 
   it('keeps the entry while siblings stream and evicts only after the last leaves', () => {
     const c = counterFor('evict-id', () => spend({}));
-    c.enter();
-    c.enter();
+    const a = accountantFor(c);
+    const b = accountantFor(c);
+    expect(c.activeRequests).toBe(2);
     release('evict-id');
     // Two still active: the entry must survive, and must not re-seed.
     expect(counterFor('evict-id', () => spend({}, { tokens: 999 }))).toBe(c);
 
-    c.leave();
+    c.leave(a.segment.requestId);
     expect(c.activeRequests).toBe(1);
-    c.leave();
+    c.leave(b.segment.requestId);
     expect(c.activeRequests).toBe(0);
 
     // Nothing active: the entry goes and the next request re-seeds.
@@ -283,20 +292,64 @@ describe('task counter', () => {
 
   it('a sibling still streaming breaches on its next frame after another breached', () => {
     const c = counterFor('sib', () => spend({ maxTokens: 60 }));
-    c.enter();
-    c.enter();
     const first = accountantFor(c);
     const sibling = accountantFor(c);
 
     drain(first, rechunk(fixture('openai-usage.sse'), 9));
     // The breaching request leaves; the sibling keeps the entry alive.
     c.breached = true;
-    c.leave();
+    c.leave(first.segment.requestId);
     release('sib');
     expect(c.activeRequests).toBe(1);
 
     // The sibling sees the shared total, not a re-seeded one, and breaches.
     expect(drain(sibling, rechunk(fixture('openai-usage.sse'), 9)).breach).toBe('max_tokens');
+  });
+
+  it('asserts when a sync happens after the request settled', () => {
+    const c = counter({});
+    const acc = accountantFor(c);
+    c.leave(acc.segment.requestId);
+    expect(() => acc.observe(`data: ${JSON.stringify({ usage: { prompt_tokens: 5 } })}\n\n`)).toThrow(
+      /sync after settle/,
+    );
+  });
+
+  it('asserts when the segment handed to sync is not the live one', () => {
+    const c = counter({});
+    const acc = accountantFor(c);
+    // Simulate a refactor that hands sync a stale object.
+    c.segments.set(acc.segment.requestId, { ...acc.segment });
+    expect(() => acc.observe(`data: ${JSON.stringify({ usage: { prompt_tokens: 5 } })}\n\n`)).toThrow(
+      /not the live one/,
+    );
+  });
+
+  it('task total equals the sum of per-request maxima when both restart mid-stream', () => {
+    // The pinning test: two requests, interleaved frames, a restart in each.
+    // Fails the day anyone shares one accumulator between requests.
+    const c = counter({});
+    const a = accountantFor(c);
+    const b = accountantFor(c);
+
+    const frames = [
+      `data: ${JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 10 } })}\n\n`,
+      `data: ${JSON.stringify({ usage: { prompt_tokens: 20, completion_tokens: 20 } })}\n\n`,
+      // a restarts
+      `data: ${JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 2 } })}\n\n`,
+      // b restarts
+      `data: ${JSON.stringify({ usage: { prompt_tokens: 20, completion_tokens: 3 } })}\n\n`,
+    ];
+
+    a.observe(frames[0]!);
+    b.observe(frames[1]!);
+    a.observe(frames[2]!);
+    b.observe(frames[3]!);
+
+    // Per-request maxima: a peaked at 20 then restarted to 12; b peaked at 40
+    // then restarted to 23. Sum of maxima + restarted segments:
+    const expected = 20 + 12 + 40 + 23;
+    expect(c.tokens).toBe(expected);
   });
 });
 
