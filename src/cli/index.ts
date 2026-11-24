@@ -115,7 +115,11 @@ async function cmdStart(): Promise<void> {
   // every cap (each process holds its own counter), so refuse loudly instead.
   const release = acquireLock(root);
   const db = openDb(dbPath(root));
-  const servers = [createProxyServer({ config, db }), createOtelServer(), createDashboardServer()];
+  const servers = [
+    createProxyServer({ config, db }),
+    createOtelServer(),
+    createDashboardServer({ config, db }),
+  ];
 
   try {
     await listen(servers[0]!, config.ports.proxy, 'proxy    ');

@@ -39,7 +39,7 @@ describe('servers', () => {
     const cases = [
       [() => createProxyServer({ config, db }), 'proxy'],
       [() => createOtelServer(), 'otel'],
-      [() => createDashboardServer(), 'dashboard'],
+      [() => createDashboardServer({ config, db }), 'dashboard'],
     ] as const;
     for (const [factory, service] of cases) {
       const res = await fetch(`${await boot(factory())}/health`);
@@ -49,10 +49,13 @@ describe('servers', () => {
     db.close();
   });
 
-  it('dashboard serves the branded placeholder', async () => {
-    const body = await (await fetch(`${await boot(createDashboardServer())}/`)).text();
+  it('dashboard serves the page with both palette colours', async () => {
+    const { config, db } = deps();
+    const body = await (await fetch(`${await boot(createDashboardServer({ config, db }))}/`)).text();
     expect(body).toContain('agentcap');
     expect(body).toContain('#111111');
+    expect(body).toContain('#F5F4F1');
+    db.close();
   });
 
   it('otel accepts an OTLP post', async () => {
