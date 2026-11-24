@@ -98,3 +98,28 @@ Framing (`sse.ts`, 106 lines), boundary extraction (`usage.ts`), task counter an
 
 ## D26 — the request total is estimate-or-usage, never the max of both
 Usage is the truth and the estimate is only a stand-in until the first usage frame. Taking the max looked safer but capped a stream at the tokenizer's guess even after real usage arrived, which over-counts prompts and breaches early on every OpenAI-style stream. Once any usage lands it wins outright.
+
+### D26 consequences the next reader must know
+A usage frame **lower** than the current estimate is not refunded on the task total: the task counter is monotone and the clamp eats the difference. Conservative by design — the task total can sit above the true spend until the next seed, never below it.
+The estimate is floor-only and it is a **foreign tokenizer**: js-tiktoken is an OpenAI tokenizer applied to Anthropic streams too, so before the first usage frame the number can run 10-20% high. Nobody should treat a pre-usage figure as final. The README must say both of these in the counting section.
+
+## D27 — a usage regression adds the new segment wholesale, it does not clamp
+A decrease in a usage frame means the provider restarted its counter: a new segment, a retry, a multi-message stream. Clamping the delta to zero silently discards the segment and undercounts, which is the dangerous direction for a budget tool — the cap then fires late. So `delta = next >= prev ? next - prev : next`, which can overcount on a spurious dip: the safe side. A `usage_regressed` event is logged with `{previous, next}` so the behaviour is visible when a provider does it.
+
+## D28 — usage merges field-wise, never whole-object
+A frame carrying only `completion_tokens` must not zero `prompt_tokens` back to the estimate. Both fields are optional in the schema and each is only overwritten by a frame that actually carries it. `estimated` stays true until both fields have been seen.
+Usage that arrives **after** the terminal frame (a trailer) still applies, and usage in a response header (`x-usage-prompt-tokens` / `x-usage-completion-tokens`) applies as authoritative usage before the first chunk. Parse order never assumes usage precedes the close.
+
+## D29 — pricing is held per segment, and an unpriced model is priced at the ceiling
+A model can change mid-stream (fallback routing, a proxy in front of a proxy), so one price applied to cumulative tokens is wrong on both sides of the switch. Each request holds `{model, priceIn, priceOut, prevTokens}`; a model change closes the segment, recomputes the price, and prices each segment separately. Tokens already burned are treated as paid at the new price so the switch itself adds no cost.
+A model missing from the pricing table is **never** priced at zero — zero is an unbounded budget. It is priced at the highest known price (`ceilingPrice()`), and an `unpriced_model` event is logged. With an empty pricing table there is no ceiling and cost stays 0; that is a config problem the `unpriced_model` events make visible.
+
+## D30 — `#sync` is fully synchronous, and the counter is released only when idle
+The event loop is what makes a shared counter safe without a lock, so nothing in the accounting path awaits; one await mid-arithmetic would let two frames interleave.
+Registry eviction used to fire on breach, which let in-flight siblings re-seed from the DB — whose sum only holds committed rows — and keep streaming past the cap. Now each request `enter()`s on admission and `leave()`s on settle (once, guarded), and `release()` evicts only when `activeRequests` is 0. A sibling that was already streaming sees the shared total and breaches on its next frame.
+
+## D31 — admission is the only writer of the step count
+Admission computes `used + 1` and passes it into the counter, which never re-reads or increments. Two writers would double count. Strict reading confirmed: `max_steps: 1` permits exactly one request, because cost is incurred per request and the ceiling is denominated in the same unit.
+
+## D32 — one proxy per project, enforced with a pid lock
+A second `agentcap start` on the same DB would half-enforce every cap, because each process holds its own in-memory counter. `.agentcap/lock` holds the pid; `start` refuses if the pid is alive and takes over if it is not, so a crash does not wedge the project. The lock is removed on exit. Multi-process remains unsupported in v0.1 — this converts a silent bug into a message.
