@@ -14,7 +14,8 @@ import {
   taskTotals,
   type RequestStatus,
 } from '../store/requests.js';
-import { Accountant, counterFor, release, type TaskCounter } from './accounting.js';
+import { Accountant } from './accounting.js';
+import { counterFor, release, type TaskCounter } from './counter.js';
 import { breachBody, isSet, terminalFrame, type BreachReason } from './verdict.js';
 import { ceilingPrice, forwardHeaders, resolveProvider, upstreamUrl, MissingKeyError, UnknownModelError } from './upstream.js';
 
@@ -32,6 +33,11 @@ const CHECK_EVERY_MS = 250;
 // A request with no task header is tracked but uncapped, never refused. Silent
 // untracked traffic is worse than visible untracked traffic.
 export const UNASSIGNED = 'unassigned';
+
+// Providers already warned about a declared-but-absent usage header. One
+// request of feedback instead of never, and once per provider rather than once
+// per request.
+const warnedHeaderUsage = new Set<string>();
 
 function json(res: import('node:http').ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
@@ -261,10 +267,28 @@ async function handle(
     // Usage in response headers is authoritative, but only where the provider
     // declared it: an undeclared `x-usage-*` header is ignored.
     if (provider.headerUsage !== null) {
-      accountant.applyUsage(
-        numberHeader(up.headers[provider.headerUsage.prompt]),
-        numberHeader(up.headers[provider.headerUsage.completion]),
-      );
+      const promptHeader = up.headers[provider.headerUsage.prompt];
+      const completionHeader = up.headers[provider.headerUsage.completion];
+      // A declared header that never appears is almost always a typo, and the
+      // symptom is silent (usage just never becomes authoritative). Warn once
+      // per provider, on the first request that comes back without it.
+      if ((promptHeader === undefined || completionHeader === undefined) && !warnedHeaderUsage.has(provider.name)) {
+        warnedHeaderUsage.add(provider.name);
+        addEvent(db, {
+          id: randomUUID(),
+          requestId,
+          type: 'header_usage_unmatched',
+          payload: {
+            provider: provider.name,
+            missing: [
+              ...(promptHeader === undefined ? [provider.headerUsage.prompt] : []),
+              ...(completionHeader === undefined ? [provider.headerUsage.completion] : []),
+            ],
+          },
+          now: now(),
+        });
+      }
+      accountant.applyUsage(numberHeader(promptHeader), numberHeader(completionHeader));
     }
 
     if (!contentType.includes('text/event-stream')) {

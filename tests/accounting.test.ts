@@ -1,16 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Accountant, type RegressInfo } from '../src/proxy/accounting.js';
 import {
-  Accountant,
   counterFor,
   release,
   resetRegistry,
-  type Price,
-  type RegressInfo,
   type TaskCounter,
   type TaskSpend,
-} from '../src/proxy/accounting.js';
+} from '../src/proxy/counter.js';
+import { FALLBACK_CEILING, ceilingPrice, type Price } from '../src/proxy/pricing.js';
 import type { BreachReason, Caps } from '../src/proxy/verdict.js';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures');
@@ -49,7 +48,7 @@ interface AccOpts {
   shape?: 'openai' | 'anthropic';
   model?: string | null;
   pricing?: Record<string, Price>;
-  ceilingPrice?: Price | null;
+  ceilingPrice?: Price;
   onRegress?: (info: RegressInfo) => void;
   onUnpriced?: (model: string | null) => void;
 }
@@ -65,7 +64,7 @@ function accountantFor(c: TaskCounter | null, opts: AccOpts = {}) {
     counter: c,
     model: opts.model === undefined ? 'm1' : opts.model,
     pricing: opts.pricing ?? PRICING,
-    ceilingPrice: opts.ceilingPrice ?? null,
+    ceilingPrice: opts.ceilingPrice ?? ceilingPrice(opts.pricing ?? PRICING),
     onRegress: opts.onRegress,
     onUnpriced: opts.onUnpriced,
   });
@@ -269,6 +268,17 @@ describe('task counter', () => {
     // gpt-4o is unknown: its 100 tokens are priced at the ceiling, not zero.
     expect(acc.cost).toBeGreaterThan(100 / 1e6 * 0.15);
     expect(flagged).toContain('gpt-4o');
+  });
+
+  it('falls back to a non-zero ceiling when the pricing table is empty', () => {
+    // The edge: empty table -> null ceiling -> cost 0 -> the USD cap never
+    // fires. An unpriced-everything install must still be capped.
+    const c = counter({ maxUsd: 0.000001 });
+    const acc = accountantFor(c, { pricing: {}, ceilingPrice: ceilingPrice({}) });
+    expect(ceilingPrice({})).toEqual(FALLBACK_CEILING);
+    const result = drain(acc, rechunk(fixture('openai-usage.sse'), 9));
+    expect(acc.cost).toBeGreaterThan(0);
+    expect(result.breach).toBe('max_usd');
   });
 
   it('keeps the entry while siblings stream and evicts only after the last leaves', () => {

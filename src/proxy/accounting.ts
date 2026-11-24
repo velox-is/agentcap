@@ -1,106 +1,14 @@
 import { countText, countValue } from './tokens.js';
 import { SseParser, classify, serialize, type ParsedFrame, type StreamShape } from './sse.js';
 import { extractAnthropic, extractOpenAi, type FrameUsage } from './usage.js';
-import { evaluate, type BreachReason, type Caps } from './verdict.js';
-import { costOf, resolvePrice, type Price } from './pricing.js';
+import { evaluate, type BreachReason } from './verdict.js';
+import { FALLBACK_CEILING, costOf, resolvePrice, type Price } from './pricing.js';
 import { advance, restartSegment, startSegment, type Segment } from './segments.js';
+import type { TaskCounter } from './counter.js';
 
-// Caps are task-scoped, so the counter is too.
-//
-// A per-request accumulator seeded from the DB at request start is wrong two
-// ways: concurrent requests on one task each seed the same prior value and
-// never see each other's live burn (so a task with N in flight can overshoot by
-// roughly Nx before any of them breaches), and a cumulative usage frame
-// replaces the total, which would wipe prior spend and reset the cap
-// mid-stream.
-//
-// So: one counter per task, seeded from the DB exactly once while it is live,
-// shared by every in-flight request, and only ever moved forward. Request-local
-// arithmetic lives entirely in segments.ts, which never sees a task total.
-
-export interface TaskSpend {
-  tokens: number;
-  usd: number;
-  startedAt: number;
-  steps: number;
-  caps: Caps;
-  dead: () => BreachReason | null;
-}
-
-export type { Price };
-
-export class TaskCounter {
-  #tokens: number;
-  #usd: number;
-  #spend: TaskSpend;
-
-  // Requests currently streaming on this task. The entry is only evicted when
-  // this hits zero: evicting on breach would let in-flight siblings re-seed
-  // from the DB, whose sum only holds committed rows, and keep streaming past
-  // the cap.
-  activeRequests = 0;
-  breached = false;
-  // Live segments by request id. Lets #sync assert the segment it was handed is
-  // still the one this counter knows about.
-  segments = new Map<string, Segment>();
-
-  constructor(spend: TaskSpend) {
-    this.#spend = spend;
-    this.#tokens = spend.tokens;
-    this.#usd = spend.usd;
-  }
-
-  get tokens(): number {
-    return this.#tokens;
-  }
-
-  get usd(): number {
-    return this.#usd;
-  }
-
-  get spend(): TaskSpend {
-    return this.#spend;
-  }
-
-  add(tokens: number, usd: number): void {
-    if (tokens > 0) this.#tokens += tokens;
-    if (usd > 0) this.#usd += usd;
-  }
-
-  enter(requestId: string, segment: Segment): void {
-    this.activeRequests += 1;
-    this.segments.set(requestId, segment);
-  }
-
-  leave(requestId: string): void {
-    this.activeRequests = Math.max(0, this.activeRequests - 1);
-    this.segments.delete(requestId);
-  }
-}
-
-const registry = new Map<string, TaskCounter>();
-
-// Seeds once per task while the entry is live. Re-seeding while siblings are
-// streaming would double count everything already on the books.
-export function counterFor(taskId: string, seed: () => TaskSpend): TaskCounter {
-  const existing = registry.get(taskId);
-  if (existing !== undefined) return existing;
-  const created = new TaskCounter(seed());
-  registry.set(taskId, created);
-  return created;
-}
-
-// Called when a request finishes. Evicts only once nothing is streaming, so the
-// next request re-seeds from committed rows and the map cannot leak.
-export function release(taskId: string): void {
-  const counter = registry.get(taskId);
-  if (counter === undefined) return;
-  if (counter.activeRequests === 0) registry.delete(taskId);
-}
-
-export function resetRegistry(): void {
-  registry.clear();
-}
+// The accountant owns request-local state only. Everything task-scoped lives in
+// counter.ts and is reached exclusively through counter.add() and the verdict.
+// Request arithmetic lives in segments.ts, which never sees a task total.
 
 export interface RegressInfo {
   previous: number;
@@ -113,7 +21,7 @@ export interface AccountingOptions {
   counter: TaskCounter | null;
   model?: string | null;
   pricing?: Record<string, Price>;
-  ceilingPrice?: Price | null;
+  ceilingPrice?: Price;
   countText?: (text: string) => number;
   // Fired when a usage frame walks the counter backwards, i.e. the provider
   // restarted its count. Surfaced as an event so it is visible, not silent.
@@ -137,13 +45,19 @@ export interface Observation {
   malformed: number;
 }
 
-// Dev-only invariant checks. Silent in production: they must never throw at a
-// user, but they make a refactor that breaks the accounting contract fail
-// loudly in tests instead of quietly undercounting.
+// Invariant checks are ON by default. NODE_ENV is the wrong axis for a tool run
+// from `npx`, where it is usually unset: it would be on for most users by
+// accident and off for exactly the people who set it. Three integer
+// comparisons per frame against network latency is nothing; `--no-assert` is
+// the escape hatch.
+let assertsEnabled = true;
+
+export function configureAsserts(enabled: boolean): void {
+  assertsEnabled = enabled;
+}
+
 function assert(condition: boolean, message: string): void {
-  if (!condition && process.env.NODE_ENV !== 'production') {
-    throw new Error(`accounting invariant: ${message}`);
-  }
+  if (assertsEnabled && !condition) throw new Error(`accounting invariant: ${message}`);
 }
 
 export class Accountant {
@@ -171,7 +85,7 @@ export class Accountant {
     const resolved = resolvePrice(
       opts.model ?? null,
       opts.pricing ?? {},
-      opts.ceilingPrice ?? null,
+      opts.ceilingPrice ?? FALLBACK_CEILING,
     );
     this.#segment = startSegment({
       requestId: opts.requestId,
@@ -301,7 +215,11 @@ export class Accountant {
   }
 
   #switchModel(model: string): void {
-    const resolved = resolvePrice(model, this.#opts.pricing ?? {}, this.#opts.ceilingPrice ?? null);
+    const resolved = resolvePrice(
+      model,
+      this.#opts.pricing ?? {},
+      this.#opts.ceilingPrice ?? FALLBACK_CEILING,
+    );
     if (resolved.ceiling) this.#opts.onUnpriced?.(model);
     const totals = this.totals;
     this.#segment = restartSegment(this.#segment, {
