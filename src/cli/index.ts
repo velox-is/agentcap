@@ -1,7 +1,16 @@
 import { parseArgs } from 'node:util';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { DB_DIR } from '../store/db.js';
 import { loadConfig, configPath, writeExampleConfig } from '../config.js';
-import { openDb, dbPath, initDbPath, createTask, getTask } from '../store/db.js';
+import {
+  openDb,
+  dbPath,
+  initDbPath,
+  createTask,
+  findProjectRoot,
+  getTask,
+} from '../store/db.js';
 import { createProxyServer } from '../proxy/server.js';
 import { createOtelServer } from '../otel/ingest.js';
 import { createDashboardServer } from '../ui/server.js';
@@ -47,6 +56,42 @@ function assertLoopback(server: Server, port: number): void {
   }
 }
 
+// A pid file, checked for liveness so a crashed proxy does not wedge the
+// project forever. Returns the release function.
+function acquireLock(root: string): () => void {
+  const path = join(root, DB_DIR, 'lock');
+  mkdirSync(dirname(path), { recursive: true });
+
+  if (existsSync(path)) {
+    const held = Number(readFileSync(path, 'utf8').trim());
+    if (Number.isInteger(held) && held > 0 && held !== process.pid && isAlive(held)) {
+      die(`another agentcap is already running here (pid ${held}); stop it or remove ${path}`);
+    }
+  }
+
+  writeFileSync(path, String(process.pid), 'utf8');
+  const release = (): void => {
+    try {
+      if (existsSync(path) && readFileSync(path, 'utf8').trim() === String(process.pid)) {
+        rmSync(path, { force: true });
+      }
+    } catch {
+      // Best effort: a stale lock is recoverable, a crashed shutdown is not.
+    }
+  };
+  process.on('exit', release);
+  return release;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function cmdInit(): Promise<void> {
   const target = configPath();
   if (existsSync(target)) die(`${target} already exists`);
@@ -64,7 +109,11 @@ async function cmdInit(): Promise<void> {
 
 async function cmdStart(): Promise<void> {
   const config = await loadConfig();
-  const db = openDb(dbPath());
+  const root = findProjectRoot();
+  // One proxy per project. A second proxy on the same DB would half-enforce
+  // every cap (each process holds its own counter), so refuse loudly instead.
+  const release = acquireLock(root);
+  const db = openDb(dbPath(root));
   const servers = [createProxyServer({ config, db }), createOtelServer(), createDashboardServer()];
 
   try {
@@ -74,6 +123,7 @@ async function cmdStart(): Promise<void> {
   } catch (err) {
     for (const server of servers) server.close();
     db.close();
+    release();
     die(`bind failed: ${(err as Error).message}`);
   }
 

@@ -33,6 +33,11 @@ for i in $(seq 1 50); do grep -q "agentcap up" start.log && break; sleep 0.1; do
 grep -q "agentcap up" start.log || { cat start.log; fail "start never came up"; }
 echo "ok start"
 
+[ -f .agentcap/lock ] && echo "ok lock written" || fail "no lock file"
+OUT=$(node dist/cli.js start 2>&1); RC=$?
+[ "$RC" -ne 0 ] || fail "second start exited 0"
+echo "$OUT" | grep -q "already running" && echo "ok second start refused" || fail "second start did not refuse"
+
 for p in 4100 4101 4102; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$p/health")
   [ "$code" = "200" ] && echo "ok health :$p" || fail "health :$p returned $code"
@@ -69,6 +74,16 @@ kill -INT $PID; wait $PID 2>/dev/null
 grep -q "agentcap down" start.log && echo "ok clean shutdown" || fail "no clean shutdown"
 sleep 0.2
 curl -s -m 1 http://127.0.0.1:4100/health >/dev/null 2>&1 && fail "proxy still listening" || echo "ok ports released"
+[ -f .agentcap/lock ] && fail "lock left behind" || echo "ok lock released"
+
+# A stale lock (dead pid) must not wedge the project.
+echo 999999 > .agentcap/lock
+node dist/cli.js start > stale.log 2>&1 &
+SPID=$!
+for i in $(seq 1 50); do grep -q "agentcap up" stale.log && break; sleep 0.1; done
+grep -q "agentcap up" stale.log || { cat stale.log; fail "stale lock blocked start"; }
+echo "ok stale lock recovered"
+kill -INT $SPID; wait $SPID 2>/dev/null
 
 echo "--- boot output ---
 $(cat start.log)"

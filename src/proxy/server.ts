@@ -14,9 +14,9 @@ import {
   taskTotals,
   type RequestStatus,
 } from '../store/requests.js';
-import { Accountant, counterFor, forget, type TaskCounter } from './accounting.js';
+import { Accountant, counterFor, release, type TaskCounter } from './accounting.js';
 import { breachBody, isSet, terminalFrame, type BreachReason } from './verdict.js';
-import { forwardHeaders, resolveProvider, upstreamUrl, MissingKeyError, UnknownModelError } from './upstream.js';
+import { ceilingPrice, forwardHeaders, resolveProvider, upstreamUrl, MissingKeyError, UnknownModelError } from './upstream.js';
 
 export interface ProxyDeps {
   config: Config;
@@ -71,41 +71,42 @@ export function createProxyServer(deps: ProxyDeps): Server {
 }
 
 // Admission: everything that can refuse a request without spending upstream
-// tokens. Both checks live here, not in the stream loop, because a refused
+// tokens. All checks live here, not in the stream loop, because a refused
 // request must not burn a single token of provider budget.
+//
+// This is the ONLY writer of the step count. It returns the post-increment
+// value and the counter takes it as given, so there is no second writer.
 function admit(
   db: Database.Database,
   task: TaskRow,
   res: import('node:http').ServerResponse,
-): boolean {
-  if (task.status === 'killed') {
+): { ok: false } | { ok: true; steps: number } {
+  const refuse = (reason: BreachReason): { ok: false } => {
     res.writeHead(429, { 'content-type': 'application/json' });
-    res.end(breachBody(task.id, 'killed'));
-    return false;
-  }
-  if (task.status === 'stuck') {
-    res.writeHead(429, { 'content-type': 'application/json' });
-    res.end(breachBody(task.id, 'max_tokens'));
-    return false;
-  }
+    res.end(breachBody(task.id, reason));
+    return { ok: false };
+  };
 
-  // This request would be step N+1. Refuse before it exists, so an over-limit
-  // step never reaches the provider.
-  if (isSet(task.max_steps) && taskSteps(db, task.id) + 1 > task.max_steps) {
-    res.writeHead(429, { 'content-type': 'application/json' });
-    res.end(breachBody(task.id, 'max_steps'));
+  if (task.status === 'killed') return refuse('killed');
+  if (task.status === 'stuck') return refuse('max_tokens');
+
+  // Cost is incurred per request, so the ceiling is denominated in the same
+  // unit: max_steps 1 permits exactly one request. Refused before the row
+  // exists, so an over-limit step never reaches the provider.
+  const used = taskSteps(db, task.id);
+  if (isSet(task.max_steps) && used + 1 > task.max_steps) {
     addEvent(db, {
       id: randomUUID(),
       requestId: null,
       type: 'budget_breach',
-      payload: { reason: 'max_steps', refusedAtAdmission: true },
+      payload: { reason: 'max_steps', refusedAtAdmission: true, steps: used },
       now: Date.now(),
     });
     setStatus(db, task.id, 'stuck');
-    return false;
+    return refuse('max_steps');
   }
 
-  return true;
+  return { ok: true, steps: used + 1 };
 }
 
 async function handle(
@@ -153,21 +154,24 @@ async function handle(
   }
 
   let task: TaskRow | null = null;
+  let steps = 1;
   if (taskId !== null) {
     task = getTask(db, taskId) ?? null;
     if (task === null) {
       json(res, 404, { error: 'unknown_task', task: taskId });
       return;
     }
-    if (!admit(db, task, res)) return;
+    const admitted = admit(db, task, res);
+    if (!admitted.ok) return;
+    steps = admitted.steps;
   }
 
   startRequest(db, { id: requestId, taskId, agent, model, now: startedAt });
   if (task !== null && task.status === 'queued') setStatus(db, task.id, 'running');
 
-  // One counter per task, seeded from the DB once per process. Two concurrent
-  // requests on the same task share it, so neither can overshoot the cap by a
-  // whole request before the other notices.
+  // One counter per task, seeded from the DB once while it is live. Two
+  // concurrent requests on the same task share it, so neither can overshoot the
+  // cap by a whole request before the other notices.
   let counter: TaskCounter | null = null;
   if (task !== null) {
     const owned = task;
@@ -177,14 +181,13 @@ async function handle(
         tokens: totals.tokens,
         usd: totals.usd,
         startedAt: owned.created_at,
-        steps: taskSteps(db, owned.id),
+        steps,
         caps: {
           maxTokens: owned.max_tokens,
           maxSteps: owned.max_steps,
           maxUsd: owned.max_usd,
           maxSeconds: owned.max_seconds,
         },
-        price: provider.price,
         // Read from the DB every check: the kill happens in another process.
         dead: () => {
           const status = readStatus(db, owned.id);
@@ -194,27 +197,63 @@ async function handle(
         },
       };
     });
-    counter.spend.steps = taskSteps(db, task.id);
+    // Single writer: admission owns the number, the counter only reads it.
+    counter.spend.steps = steps;
+    counter.enter();
   }
 
-  const accountant = new Accountant({ shape: provider.shape, counter });
+  const accountant = new Accountant({
+    shape: provider.shape,
+    counter,
+    model,
+    pricing: config.pricing,
+    ceilingPrice: ceilingPrice(config),
+    onUnpriced: (unknownModel) => {
+      addEvent(db, {
+        id: randomUUID(),
+        requestId,
+        type: 'unpriced_model',
+        payload: { model: unknownModel },
+        now: now(),
+      });
+    },
+    onRegress: (info) => {
+      addEvent(db, {
+        id: randomUUID(),
+        requestId,
+        type: 'usage_regressed',
+        payload: info,
+        now: now(),
+      });
+    },
+  });
   accountant.seedPrompt(body);
 
   const headers = forwardHeaders(provider, req.headers);
   const url = new URL(upstreamUrl(provider, req.url ?? '/'));
   const send = url.protocol === 'https:' ? httpsRequest : httpRequest;
 
-  const recordCost = (promptTokens: number, completionTokens: number): number => {
-    if (provider.price === null) return 0;
-    return (promptTokens / 1e6) * provider.price.in + (completionTokens / 1e6) * provider.price.out;
+  // Settled once, on whichever path ends the request, so the registry is
+  // released exactly once and siblings keep the seeded entry while they run.
+  let settled = false;
+  const settle = (): void => {
+    if (settled) return;
+    settled = true;
+    if (taskId !== null) {
+      counter?.leave();
+      release(taskId);
+    }
   };
 
   const upstream = send(url, { method: req.method ?? 'POST', headers, timeout: 120_000 }, (up) => {
     const status = up.statusCode ?? 502;
     const contentType = String(up.headers['content-type'] ?? '');
 
+    // Usage in response headers is authoritative and lands before any chunk.
+    accountant.applyUsage(numberHeader(up.headers['x-usage-prompt-tokens']), numberHeader(up.headers['x-usage-completion-tokens']));
+
     if (!contentType.includes('text/event-stream')) {
-      void pipeJson(res, up, { db, requestId, status, startedAt, now, recordCost, counter });
+      void pipeJson(res, up, { db, requestId, status, startedAt, now, accountant, settle });
       return;
     }
 
@@ -249,17 +288,13 @@ async function handle(
           },
           now: now(),
         });
-        if (taskId !== null) {
-          setStatus(db, taskId, breach === 'killed' ? 'killed' : 'stuck');
-          // The next request re-seeds from the DB, so the registry cannot leak.
-          forget(taskId);
-        }
+        if (taskId !== null) setStatus(db, taskId, breach === 'killed' ? 'killed' : 'stuck');
       }
 
       finishRequest(db, requestId, {
         promptTokens: final.promptTokens,
         completionTokens: final.completionTokens,
-        estCost: recordCost(final.promptTokens, final.completionTokens),
+        estCost: accountant.cost,
         latencyMs: now() - startedAt,
         status: requestStatus,
         httpStatus: 200,
@@ -268,6 +303,7 @@ async function handle(
 
       if (breach !== null) res.write(terminalFrame(provider.shape, taskId ?? requestId, breach));
       accountant.close();
+      settle();
       res.end();
       up.destroy();
     };
@@ -314,19 +350,21 @@ async function handle(
       finishRequest(db, requestId, {
         promptTokens: final.promptTokens,
         completionTokens: final.completionTokens,
-        estCost: recordCost(final.promptTokens, final.completionTokens),
+        estCost: accountant.cost,
         latencyMs: now() - startedAt,
         status: 'client_gone',
         httpStatus: 200,
         estimated: final.estimated,
       });
       accountant.close();
+      settle();
       up.destroy();
     });
   });
 
   upstream.on('error', () => {
     if (res.headersSent) return;
+    settle();
     json(res, 502, { error: 'upstream_unreachable' });
   });
 
@@ -339,8 +377,8 @@ interface PipeCtx {
   status: number;
   startedAt: number;
   now: () => number;
-  recordCost: (prompt: number, completion: number) => number;
-  counter: TaskCounter | null;
+  accountant: Accountant;
+  settle: () => void;
 }
 
 async function pipeJson(
@@ -352,28 +390,29 @@ async function pipeJson(
   for await (const chunk of up) chunks.push(chunk as Buffer);
   const text = Buffer.concat(chunks).toString('utf8');
 
-  let usage: { prompt_tokens?: number; completion_tokens?: number } = {};
   try {
-    const parsed = JSON.parse(text) as { usage?: typeof usage };
-    usage = parsed.usage ?? {};
+    const parsed = JSON.parse(text) as {
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    ctx.accountant.applyUsage(
+      parsed.usage?.prompt_tokens ?? null,
+      parsed.usage?.completion_tokens ?? null,
+    );
   } catch {
     // Non-JSON body: forward as-is, count nothing.
   }
 
-  const prompt = usage.prompt_tokens ?? 0;
-  const completion = usage.completion_tokens ?? 0;
-  const estCost = ctx.recordCost(prompt, completion);
-  ctx.counter?.add(prompt + completion, estCost);
-
+  const final = ctx.accountant.totals;
   finishRequest(ctx.db, ctx.requestId, {
-    promptTokens: prompt,
-    completionTokens: completion,
-    estCost,
+    promptTokens: final.promptTokens,
+    completionTokens: final.completionTokens,
+    estCost: ctx.accountant.cost,
     latencyMs: ctx.now() - ctx.startedAt,
     status: ctx.status < 400 ? 'ok' : 'upstream_error',
     httpStatus: ctx.status,
-    estimated: usage.prompt_tokens === undefined,
+    estimated: final.estimated,
   });
+  ctx.settle();
 
   res.writeHead(ctx.status, { 'content-type': 'application/json' });
   res.end(text);
@@ -383,4 +422,11 @@ function headerValue(value: string | string[] | undefined): string | null {
   if (value === undefined) return null;
   const first = Array.isArray(value) ? value[0] : value;
   return first === undefined || first === '' ? null : first;
+}
+
+function numberHeader(value: string | string[] | undefined): number | null {
+  const raw = headerValue(value);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
