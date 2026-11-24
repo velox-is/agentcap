@@ -32,6 +32,21 @@ export function shapeFor(path: string, override?: 'openai' | 'anthropic'): 'open
   return /\/messages(\?|$|\/)/.test(path) ? 'anthropic' : 'openai';
 }
 
+// The highest price in the table, used for any model it does not list. Pricing
+// an unknown model at zero would leave its budget unbounded, so the ceiling is
+// the safe default and the event log flags every use.
+export function ceilingPrice(config: Config): { in: number; out: number } | null {
+  let inMax = 0;
+  let outMax = 0;
+  let seen = false;
+  for (const price of Object.values(config.pricing)) {
+    seen = true;
+    if (price.in > inMax) inMax = price.in;
+    if (price.out > outMax) outMax = price.out;
+  }
+  return seen ? { in: inMax, out: outMax } : null;
+}
+
 export function resolveProvider(config: Config, model: string, path: string): ResolvedProvider {
   for (const [name, provider] of Object.entries(config.providers)) {
     if (!provider.models.includes(model)) continue;
