@@ -10,8 +10,8 @@
     "dist",
     "!dist/cli.js.map",
     "assets",
-    "docs/dashboard.png",
     "docs/demo.gif",
+    "docs/case-study.md",
     "agentcap.config.example.json",
     "README.md",
     "LICENSE"

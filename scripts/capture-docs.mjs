@@ -193,6 +193,9 @@ if (ytId !== null) {
   await sleep(900);
 }
 
+// A final frame in the sequence, so the GIF ends on the late row rather than
+// only the still showing it.
+await shoot(join(out, `${String(FRAMES).padStart(3, '0')}.png`));
 await shoot('docs/dashboard.png');
 
 // 4. GIF.

@@ -91,6 +91,12 @@ const breachOf = (text) => {
 const first = await send();
 await sleep(400);
 
+// Snapshot the spend at the moment the cap fired, before any OTel span lands.
+// This is the "tokens before the cap" half of the headline; the other half is
+// whatever arrives afterwards.
+const atBreach = await (await fetch('http://127.0.0.1:4102/api/state')).json();
+const before = atBreach.tasks.find((t) => t.id === task);
+
 // Then three spans against the dead task: real usage, arriving after the cap.
 const otlp = (prompt, completion) =>
   fetch('http://127.0.0.1:4101/v1/traces', {
@@ -148,6 +154,8 @@ console.log(
     {
       breachBody: breachOf(first),
       refusedBody: breachOf(refused),
+      cap: 100,
+      tokensAtBreach: before?.tokens,
       status: row?.status,
       breachReason: row?.breachReason,
       tokensTotal: row?.tokens,

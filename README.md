@@ -29,6 +29,8 @@ export OPENAI_AGENT_TASK=$TASK     # see "Attribution" below
 
 Open <http://127.0.0.1:4102> for the live dashboard.
 
+Why the numbers here are trustworthy, and where a cap legitimately overshoots: [docs/case-study.md](docs/case-study.md).
+
 ## Attribution
 
 The task is passed in a header, because the path has to stay transparent:
@@ -72,10 +74,6 @@ A model with no `pricing` entry is priced at the highest rate in the table and f
 ```
 
 Keys are env var names only, never in the file. `shape` (`openai` | `anthropic`) overrides path-based stream detection; `headerUsage` opts a provider into usage headers it actually sends. Binding is loopback-only and enforced after `listen`.
-
-## Screenshot
-
-![tasks and live feed](docs/dashboard.png)
 
 ## Requirements
 
