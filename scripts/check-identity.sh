@@ -26,9 +26,9 @@ bad=$(git log --format='%ae' | sort -u | grep -v 'velox-is@users.noreply.github.
 
 # The retired handle and the unregistered domain must appear nowhere a reader
 # can see them.
-# Excludes itself: this file names both on purpose.
+# Excludes itself and AGENTS.md: both name the retired handle on purpose.
 hits=$(grep -rn 'J0SEPH-K\|veloxis\.dev' --exclude-dir=node_modules --exclude-dir=.git \
-  --exclude-dir=dist --exclude='*.tgz' --exclude='check-identity.sh' . 2>/dev/null || true)
+  --exclude-dir=dist --exclude='*.tgz' --exclude='check-identity.sh' --exclude='AGENTS.md' . 2>/dev/null || true)
 [ -z "$hits" ] || { echo "retired handle or domain:"; echo "$hits"; fail=1; }
 
 [ "$fail" -eq 0 ] && echo "identity ok: Veloxis <$email> -> $url"
