@@ -77,4 +77,18 @@ while the posting account is still too young to link it.
   "completely/primarily LLM generated copy". Recorded in launch-metrics with a
   sub tally; LocalLLaMA is 0/2 and the next attempt there has to be plainer.
 - Per-comment table added: upvotes, replies, live/removed, plus a warm-leads table.
-  By day 10 the sub tally picks the launch sub instead of guessing.
+  By day 8 the sub tally picks the launch sub instead of guessing.
+
+## 2026-11-26 (schedule correction)
+
+- The launch pin was wrong twice. It said "day 11, 2026-12-06"; Dec 6 is a
+  Sunday, and day 1 was 11-25 so a Dec 6 launch is posting day 12, not 11.
+- Re-pinned to **Thursday 2026-12-03, 22:00–23:00 KST** (13:00–14:00 UTC,
+  08:00–09:00 US Eastern). KST night is the point: a 14:00 KST post is midnight
+  in New York. Friday 12-04 is the fallback, Monday 12-07 the alternative if two
+  days are lost.
+- Launch is posting day 9. The old day-10 prep section is now day 8 and includes
+  the endpoint and apex checks that used to sit on launch morning.
+- Case-study rewrite moved to days 4–5 with the review on day 6, four days before
+  posting. Re-run `scripts/measure-late.mjs` on the rewrite day so every number
+  in the document comes from that day's output.

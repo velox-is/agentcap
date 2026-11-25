@@ -1,7 +1,7 @@
 # Launch metrics
 
 Two tables. The daily line is the headline number. The per-comment table is what
-actually picks the launch sub — by day 10 it should say which subs tolerate a new
+actually picks the launch sub — by day 8 it should say which subs tolerate a new
 account and which do not.
 
 ## Daily
