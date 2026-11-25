@@ -50,3 +50,17 @@ while the posting account is still too young to link it.
 - Signup endpoint captures `document.referrer` and `location.origin`, keeps the
   first attribution on a resubmit, and counts `seen`. Verified end to end: row
   reads the Reddit URL and `seen:2` after a second POST from another referrer.
+
+## 2026-11-25 (day 1, warm-up)
+
+- Baseline row recorded: 0 stars, 0 signups, 0 traffic, 0 issues. Everything after
+  is measured against it.
+- Read three subs' new queues and picked threads under 24 hours old: r/LocalLLaMA
+  on API cost vs flat subscription, r/n8n on QA gate placement in a 4-agent
+  research loop, r/ClaudeAI on agent count exploding. Drafts and links are in
+  `docs/day1-comments.md`.
+- No links, no product name. One number in each: the $5.40/hr figure, the single
+  writer for the counter, the artifact-not-transcript handoff.
+- Reddit blocks this machine from both the browser and the JSON endpoints (network
+  security page in the browser, 403 on `.json`), so posting is manual from the
+  account. `web_extract` reads the pages fine, which is enough to pick threads.
