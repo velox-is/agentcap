@@ -38,3 +38,33 @@ Comment: <https://old.reddit.com/r/ClaudeAI/comments/1y4xo5o/792_agents_jumped_t
 New reddit's composer is nested shadow DOM (`shreddit-composer` → `reddit-rte`) and CDP `Input.insertText` does not reach it. old.reddit's `textarea[name=text]` takes `Input.insertText` fine and the save button posts. Post on old.reddit, verify on new.
 
 Reddit blocks this machine's default browser profile and all `.json` endpoints, but a throwaway `--user-data-dir` Chrome with `--remote-debugging-port` loads pages normally once it sits through the "prove your humanity" interstitial. The real Chrome profile will not launch under CDP with `ProcessSingleton` / `Operation not permitted` because `Application Support` is TCC-protected.
+
+---
+
+# Day 2 — 2026-11-26
+
+Two comments. Replies first: none. Inbox empty, no comment replies on any of the
+two day-1 threads that are still live.
+
+## Result
+
+| # | sub | landed? | filtered? | note |
+| --- | --- | --- | --- | --- |
+| 1 | selfhosted | yes | no | backup-verification thread, short and blunt |
+| 2 | ClaudeAI | yes | no | usage-limit blowout, longer and technical |
+
+Both checked logged-out. The 20-hour plan said one in r/selfhosted and one
+anywhere; selfhosted rule 2 allows a service mention "only if relevant and adds
+value", so no product name yet.
+
+## r/selfhosted — 19t5nj6cvtjj4
+
+Thread: <https://www.reddit.com/r/selfhosted/comments/1y4p24n/my_n8n_backup_ran_green_for_9_months_and_saved/>
+
+> A green ping is a liveness check, not a correctness check — the script exiting 0 only ever proved the script ran. The size delta check is the cheap version of what you actually did in October: restore, compare, fail on mismatch. One caveat on the 20 percent threshold, it has to compare against the same source path, otherwise a legitimate move to sqlite3 .backup changes the size once and trips it.
+
+## r/ClaudeAI — 19t5oz448nc3m
+
+Thread: <https://www.reddit.com/r/ClaudeAI/comments/1y50f53/accidentaly_nuking_my_usage_limit_in_1_hour_on/>
+
+> 34 subagents is what a soft instruction gets you. Put the ceiling outside the model: a hard max-subagent count the orchestrator enforces and refuses past, plus a per-task token counter that kills the whole task at the cap instead of letting it finish politely. The prompt line is advisory, the counter is not — and 660M tokens in 50 minutes is exactly the shape of spend that only shows up after the fact.
