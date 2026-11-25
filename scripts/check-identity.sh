@@ -12,13 +12,17 @@ case "$url" in
   *) echo "remote is not velox-is/agentcap: $url"; fail=1 ;;
 esac
 
-name=$(git config user.name || echo none)
-email=$(git config user.email || echo none)
-[ "$name" = "Veloxis" ] || { echo "user.name is '$name'"; fail=1; }
-case "$email" in
-  *velox-is@users.noreply.github.com) ;;
-  *) echo "user.email is '$email'"; fail=1 ;;
-esac
+# Repo-local config is the guard for a human pushing. A CI checkout has no config
+# at all, so there the commit authors below are the assertion that counts.
+if [ -z "${CI:-}" ]; then
+  name=$(git config user.name || echo none)
+  email=$(git config user.email || echo none)
+  [ "$name" = "Veloxis" ] || { echo "user.name is '$name'"; fail=1; }
+  case "$email" in
+    *velox-is@users.noreply.github.com) ;;
+    *) echo "user.email is '$email'"; fail=1 ;;
+  esac
+fi
 
 # Every commit must carry the noreply address; veloxis.dev is unregistered.
 bad=$(git log --format='%ae' | sort -u | grep -v 'velox-is@users.noreply.github.com' || true)
