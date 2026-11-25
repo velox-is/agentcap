@@ -13,8 +13,10 @@ KST post lands at midnight Eastern and is read by nobody.
 the site is broken. **Alternative: Monday 2026-12-07**, better for HN, worse for
 Reddit, only if two warm-up days are lost outright.
 
-Day 1 was 2026-11-25, so launch is posting day 9. The old pin said "day 11 /
-Dec 6" and was wrong twice — Dec 6 is a Sunday, and the count had one extra day.
+Days 1 and 2 both ran on 2026-11-25 KST, so the day numbers sit one ahead of
+the calendar and 12-03 is posting day 10: nine warm-up days, then the post.
+The old pin said "day 11 / Dec 6" and was wrong twice — Dec 6 is a Sunday,
+and the count carried one extra day on top of that.
 
 Rules that apply the whole time:
 
@@ -34,14 +36,15 @@ Rules that apply the whole time:
 | day | date | work |
 | --- | --- | --- |
 | 1 | Wed 11-25 | baseline row, three comments — done |
-| 2 | Thu 11-26 | replies first, two comments — done, LocalLLaMA removals logged |
-| 3 | Fri 11-27 | presence. Reply to anything overnight. Two comments. |
-| 4 | Sat 11-28 | case-study rewrite, first pass |
-| 5 | Sun 11-29 | case-study rewrite finished; two comments |
-| 6 | Mon 11-30 | case-study review signed off; first comment naming agentcap, no link |
-| 7 | Tue 12-01 | first comment with a link, in a thread that asked for a tool |
-| 8 | Wed 12-02 | prep day, then stop posting |
-| 9 | Thu 12-03 | launch, 22:00–23:00 KST |
+| 2 | Wed 11-25 | replies first, two comments — done, LocalLLaMA removals logged |
+| 3 | Thu 11-26 | presence. Reply to anything overnight. Two comments. |
+| 4 | Fri 11-27 | case-study rewrite, first pass |
+| 5 | Sat 11-28 | case-study rewrite finished; two comments |
+| 6 | Sun 11-29 | case-study review signed off; first comment naming agentcap, no link |
+| 7 | Mon 11-30 | first comment with a link, in a thread that asked for a tool |
+| 8 | Tue 12-01 | link follow-up, check referrer-less traffic |
+| 9 | Wed 12-02 | prep day, then stop posting |
+| 10 | Thu 12-03 | launch, 22:00–23:00 KST |
 
 The case study is done on day 5 and reviewed on day 6, four days before launch.
 Rewriting it on launch morning is how a typo in the numbers ships.
@@ -72,17 +75,17 @@ measurement, not a pitch.
 - [ ] Answer every reply within a few hours. Late replies on a young account look
       like a bot.
 
-## Days 7–8 — link, then prep
+## Days 7–9 — link, then prep
 
 - [ ] Day 7: first comment with the link, in a thread that asked for a tool.
 - [ ] Day 8: check referrer-less traffic in `gh api repos/velox-is/agentcap/traffic/views`.
-- [ ] Day 8: confirm the signup endpoint answers 200 with `ok:true` and that the KV
+- [ ] Day 9: confirm the signup endpoint answers 200 with `ok:true` and that the KV
       count equals the metrics row.
-- [ ] Day 8: final read of the launch post. Title states the problem, not the
+- [ ] Day 9: final read of the launch post. Title states the problem, not the
       product. Read it aloud once.
-- [ ] Day 8: confirm `agentcap.pages.dev` still serves and the apex still answers.
+- [ ] Day 9: confirm `agentcap.pages.dev` still serves and the apex still answers.
 
-## Day 9 — launch (Thu 2026-12-03, 22:00–23:00 KST)
+## Day 10 — launch (Thu 2026-12-03, 22:00–23:00 KST)
 
 Do not post early. One sub, then Show HN the same day, then nothing.
 

@@ -82,12 +82,12 @@ while the posting account is still too young to link it.
 ## 2026-11-26 (schedule correction)
 
 - The launch pin was wrong twice. It said "day 11, 2026-12-06"; Dec 6 is a
-  Sunday, and day 1 was 11-25 so a Dec 6 launch is posting day 12, not 11.
+  Sunday, and the count was one day ahead of the calendar on top of that.
 - Re-pinned to **Thursday 2026-12-03, 22:00–23:00 KST** (13:00–14:00 UTC,
   08:00–09:00 US Eastern). KST night is the point: a 14:00 KST post is midnight
   in New York. Friday 12-04 is the fallback, Monday 12-07 the alternative if two
   days are lost.
-- Launch is posting day 9. The old day-10 prep section is now day 8 and includes
+- Launch is posting day 10. The old day-10 prep section is now day 9 and includes
   the endpoint and apex checks that used to sit on launch morning.
 - Case-study rewrite moved to days 4–5 with the review on day 6, four days before
   posting. Re-run `scripts/measure-late.mjs` on the rewrite day so every number
