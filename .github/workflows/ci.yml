@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The pre-push hook only guards local pushes, and only if hooksPath is set.
+      # This is the same assertion, where it cannot be skipped.
+      - name: identity
+        run: bash scripts/check-identity.sh
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+      - run: bash scripts/smoke.sh
+
+  packed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm pack
+      # The tarball is the only artifact a user actually gets. Prove it boots and
+      # that the fallback tokenizer resolves from it.
+      - name: install and estimate
+        run: node scripts/verify-estimated.mjs "$(ls agentcap-*.tgz)"
