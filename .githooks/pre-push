@@ -1,0 +1,18 @@
+#!/bin/sh
+# Tracked, so it survives a clone (core.hooksPath points here). A wrong remote
+# is impossible rather than unlikely: this repo is Veloxis's, always.
+set -eu
+
+url=$(git remote get-url origin)
+case "$url" in
+  *velox-is/agentcap*) ;;
+  *) echo "wrong remote: $url" >&2; exit 1 ;;
+esac
+
+name=$(git config user.name)
+email=$(git config user.email)
+case "$email" in
+  *velox-is@users.noreply.github.com) ;;
+  *) echo "wrong author email: $email" >&2; exit 1 ;;
+esac
+[ "$name" = "Veloxis" ] || { echo "wrong author name: $name" >&2; exit 1; }

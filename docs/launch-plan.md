@@ -34,7 +34,7 @@ Rules that apply the whole time:
 ## Days 7–9 — link allowed
 
 - [ ] Day 7: first comment with the link, in a thread that asked for a tool.
-- [ ] Day 8: check referrer-less traffic in `gh api repos/J0SEPH-K/agentcap/traffic/views`.
+- [ ] Day 8: check referrer-less traffic in `gh api repos/velox-is/agentcap/traffic/views`.
 - [ ] Day 9: draft the launch post. Title states the problem, not the product.
 
 ## Day 10 — launch
