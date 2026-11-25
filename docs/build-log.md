@@ -39,3 +39,14 @@ while the posting account is still too young to link it.
   `docs/launch-plan.md`. Not launch-blocking.
 - Self-hosting section added to the README because r/selfhosted requires one.
 - `AGENTS.md`, `docs/backlog.md`, `docs/feedback.md`, `docs/launch-metrics.md`.
+
+## 2026-11-25 (day 0, continued)
+
+- Identity hole closed: `includeIf "gitdir:~/Projects/agentcap*/"` in
+  `~/.gitconfig` pointing at a Veloxis identity file, so a fresh clone commits
+  correctly with no manual step. Verified on a real clone into a matching path.
+- `check-identity.sh` now also fails on any `Co-authored-by:` trailer carrying a
+  foreign address - agents add those and they leak the same thing.
+- Signup endpoint captures `document.referrer` and `location.origin`, keeps the
+  first attribution on a resubmit, and counts `seen`. Verified end to end: row
+  reads the Reddit URL and `seen:2` after a second POST from another referrer.
