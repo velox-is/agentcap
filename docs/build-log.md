@@ -67,3 +67,14 @@ while the posting account is still too young to link it.
   `--remote-debugging-port`, sit through the humanity interstitial, then type into
   old.reddit's `textarea[name=text]` via CDP `Input.insertText`. New reddit's
   composer is nested shadow DOM and `insertText` does not reach it.
+
+## 2026-11-26 (day 2)
+
+- No replies overnight; inbox empty. Two comments instead of three: r/selfhosted
+  on backup verification, r/ClaudeAI on subagent fan-out.
+- **Both LocalLLaMA comments from day 1 were removed by a moderator** within 20 and
+  50 minutes. ClaudeAI, n8n and selfhosted all kept theirs. LocalLLaMA rule 3 bans
+  "completely/primarily LLM generated copy". Recorded in launch-metrics with a
+  sub tally; LocalLLaMA is 0/2 and the next attempt there has to be plainer.
+- Per-comment table added: upvotes, replies, live/removed, plus a warm-leads table.
+  By day 10 the sub tally picks the launch sub instead of guessing.
