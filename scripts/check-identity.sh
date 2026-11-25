@@ -28,6 +28,13 @@ fi
 bad=$(git log --format='%ae' | sort -u | grep -v 'velox-is@users.noreply.github.com' || true)
 [ -z "$bad" ] || { echo "commits authored by: $bad"; fail=1; }
 
+# Agents add Co-authored-by trailers constantly, and they carry whatever address
+# the generating tool had. Same assertion, on the trailer.
+co=$(git log --format='%(trailers:key=Co-authored-by,valueonly)' \
+  | grep -o '<[^>]*>' | tr -d '<>' | sort -u \
+  | grep -v 'velox-is@users.noreply.github.com' || true)
+[ -z "$co" ] || { echo "co-authors: $co"; fail=1; }
+
 # The retired handle and the unregistered domain must appear nowhere a reader
 # can see them.
 # Excludes itself and AGENTS.md: both name the retired handle on purpose.
