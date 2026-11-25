@@ -48,24 +48,33 @@ Rules that apply the whole time:
 
 ## Targets
 
-In rough order of tolerance for a tool link:
+Written from each sub's own pinned rules, not scraped summaries:
 
-| Sub | Fit | Note |
+| Sub | Fit | Rule that decides the post |
 | --- | --- | --- |
-| r/ClaudeAI | high | accepts tool posts, hostile to hype |
-| r/LocalLLaMA | medium | wants local-first, will ask why not an SDK |
-| r/SideProject | medium | tolerates self-promo by design, low traffic |
-| r/devops | low | needs an ops framing, not an agent framing |
-| HN Show HN | low | needs the account to be a week old minimum |
+| r/LocalLLaMA | high | Technical detail required, and the repo link belongs in the body. A post that is only a link and a slogan gets removed as low effort. The overshoot numbers and the polling window are the part this sub will actually argue with. |
+| r/ClaudeAI | high | Loosest of the four about tools. Hostile to hype, fine with a screenshot and a short mechanism description. |
+| r/n8n | medium | Short tool post tolerated, but it has to name a concrete workflow. Vague "works with everything" framing gets ignored. |
+| r/selfhosted | medium | Requires a specific self-hosted section: compose snippet, ports, data location, and how to back out. Flair is mandatory and the post is removed without it. |
+| r/SideProject | low | Tolerates self-promo by design, low traffic. Cheap cross-post, not a launch. |
+| HN Show HN | low | Account must be a week old minimum. Title is fixed as `Show HN: agentcap – ...`. |
 
 ## Blockers
 
-- **Domain.** `agentcap.dev` is registered (2026-02-25, expires 2027-02-25,
-  Cloudflare NS, no A record — parked). `agentcap.io` and `getagentcap.com` are
-  taken. `agentcap.sh`, `agentcap.run`, `agentcap.tools` look free at Porkbun
-  (31.20 / 4.12 / 9.78 USD first year, renewals 46.65 / 25.23 / 32.44). `.run` is
-  cheap and renews badly; `.sh` fits a CLI tool but is 31 USD and was not
-  confirmed free. No registrar credentials are on this machine.
+- **Domain — in someone else's Cloudflare account, and not launch-blocking.**
+  `agentcap.dev` is registered through Cloudflare (2026-02-25, expires
+  2027-02-25) and its NS are Cloudflare's, but the authed account has zero
+  zones, so the DNS records cannot be written from here. Three clicks in the
+  account that holds the zone:
+  1. DNS → add a `CNAME` named `agentcap` pointing at `agentcap-site.pages.dev`,
+     proxied (orange cloud).
+  2. Workers & Pages → `agentcap` → Custom domains → attach `agentcap.dev`.
+  3. Wait for the certificate, usually under a minute.
+
+  Until then the site is live at <https://agentcap.pages.dev> and the warm-up
+  proceeds there. Do not hold day 1 for DNS.
+- **`agentcap.pages.dev` is the canonical URL in the meantime.** If the domain
+  never lands, the README links pages.dev and nothing else changes.
 - **Profile pin.** GitHub user pinned items are profile-level and have no public
   API mutation; it is a click on the profile page. Repo topics are set
   (`ai-agents`, `llm`, `observability`, `budget`, `proxy`, `sqlite`, `cli`,

@@ -92,6 +92,27 @@ A model with no `pricing` entry is priced at the highest rate in the table and f
 
 Keys are env var names only, never in the file. `shape` (`openai` | `anthropic`) overrides path-based stream detection; `headerUsage` opts a provider into usage headers it actually sends. Binding is loopback-only and enforced after `listen`.
 
+## Self-hosting
+
+There is no server to host. It is one process on your own machine, so "self-hosted" here means the container you already run your agents in.
+
+```yaml
+# docker-compose.yml, next to your agent
+services:
+  agentcap:
+    image: node:22-alpine
+    working_dir: /w
+    command: sh -c "npx -y agentcap@0.1.0 start"
+    volumes: ['./agentcap:/w']
+    ports: ['127.0.0.1:4100-4102:4100-4102']
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+```
+
+State is one SQLite file plus a lock file under `.agentcap/` — copy that directory to back it up, delete it to reset. Nothing else is written, nothing is sent anywhere. Stop the process and the ports close; there is no daemon left behind.
+
+It binds loopback only and refuses to start on `0.0.0.0`, so a container needs the port mapping above rather than a published interface.
+
 ## Requirements
 
 Node 22+. One process per project (enforced by a pid lock in `.agentcap/`). SQLite via better-sqlite3.
