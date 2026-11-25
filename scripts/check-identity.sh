@@ -35,5 +35,6 @@ hits=$(grep -rn 'J0SEPH-K\|veloxis\.dev' --exclude-dir=node_modules --exclude-di
   --exclude-dir=dist --exclude='*.tgz' --exclude='check-identity.sh' --exclude='AGENTS.md' . 2>/dev/null || true)
 [ -z "$hits" ] || { echo "retired handle or domain:"; echo "$hits"; fail=1; }
 
-[ "$fail" -eq 0 ] && echo "identity ok: Veloxis <$email> -> $url"
+# $email is unset under CI, so the success line reads it defensively.
+[ "$fail" -eq 0 ] && echo "identity ok: Veloxis <${email:-commits}> -> $url"
 exit "$fail"
