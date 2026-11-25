@@ -37,7 +37,15 @@ Rules that apply the whole time:
 - [ ] Day 8: check referrer-less traffic in `gh api repos/velox-is/agentcap/traffic/views`.
 - [ ] Day 9: draft the launch post. Title states the problem, not the product.
 
-## Day 10 — launch
+## Day 10 — prep
+
+- [ ] Final read of the post. Title states the problem, not the product.
+- [ ] Confirm the signup endpoint still answers 200 with `ok:true` and that the
+      KV count is what the metrics row says.
+
+## Day 11 — launch (2026-12-06)
+
+Calendar it. Do not post early. One sub, then Show HN the same day, then nothing.
 
 - [ ] Post. Body opens with the failure mode the case study is about, links the
       case study, not the repo root.
