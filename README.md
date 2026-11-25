@@ -44,6 +44,8 @@ const client = new OpenAI({
 
 Open <http://127.0.0.1:4102> for the live dashboard.
 
+Launch updates, one email when 0.2 ships: <https://agentcap.pages.dev>.
+
 Why the numbers here are trustworthy, and where a cap legitimately overshoots: [docs/case-study.md](docs/case-study.md).
 
 ## Attribution
