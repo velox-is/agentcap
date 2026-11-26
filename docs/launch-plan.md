@@ -18,6 +18,14 @@ the calendar and 12-03 is posting day 10: nine warm-up days, then the post.
 The old pin said "day 11 / Dec 6" and was wrong twice — Dec 6 is a Sunday,
 and the count carried one extra day on top of that.
 
+**Day 3 changed the diagnosis.** All eight warm-up comments across four subs were
+removed one to sixteen hours after posting, with no modmail and no rule quoted,
+and the anonymous view of the profile shows zero comments and zero comment karma
+while a control profile loads normally. That is the account sitting in Reddit's
+new-account filter, not four moderators agreeing. Consequences: LocalLLaMA is off
+the list by the pre-set rule, and every sub stays provisional until the filter
+clears or an appeal lands. Details and evidence in `launch-metrics.md`.
+
 Rules that apply the whole time:
 
 - **No links in the first week.** Comments carry the argument, not the URL. A
@@ -37,7 +45,7 @@ Rules that apply the whole time:
 | --- | --- | --- |
 | 1 | Wed 11-25 | baseline row, three comments — done |
 | 2 | Wed 11-25 | replies first, two comments — done, LocalLLaMA removals logged |
-| 3 | Thu 11-26 | presence. Reply to anything overnight. Two comments. |
+| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. Cause is the account. |
 | 4 | Fri 11-27 | case-study rewrite, first pass |
 | 5 | Sat 11-28 | case-study rewrite finished; two comments |
 | 6 | Sun 11-29 | case-study review signed off; first comment naming agentcap, no link |
@@ -57,6 +65,10 @@ Rewriting it on launch morning is how a typo in the numbers ships.
 - [ ] 2–3 comments/day on threads where someone describes the problem. Answer the
       problem. No mention of agentcap.
 - [ ] Day 3: check which comments got replies. That is the vocabulary to reuse.
+- [ ] Day 3, if anything was removed: switch the liveness check to a fresh
+      browser profile. Logged-in old.reddit keeps rendering your own removed
+      comments and keeps the score at 1, so it will tell you everything is fine
+      while nobody can see them.
 
 ## Days 4–6 — the case study, then credibility
 
@@ -102,8 +114,8 @@ Written from each sub's own pinned rules, not scraped summaries:
 
 | Sub | Fit | Rule that decides the post |
 | --- | --- | --- |
-| r/ClaudeAI | high | Loosest of the four about tools, and the only sub that has not removed a comment. Hostile to hype, fine with a screenshot and a short mechanism description. |
-| r/LocalLLaMA | high value, low reliability | Rule 3 bans LLM-generated copy and removed both day-1 comments. Technical detail required and the repo link belongs in the body, but the prose has to be plainer than everywhere else. |
+| r/ClaudeAI | high | Loosest of the four about tools. Hostile to hype, fine with a screenshot and a short mechanism description. Also removed a comment on day 3, so it is not proven either. |
+| r/LocalLLaMA | high value, low reliability | OFF THE LIST as of day 3. Removed three comments, the third one inside 57 minutes. Rule 3 bans LLM-generated copy, but the removals turned out to be account-level, so plainer prose is not what saves it. No fourth attempt this week. If it returns before day 9, the launch post here must be a link post with a short plain body, not a text post. |
 | r/n8n | medium | Short tool post tolerated, but it has to name a concrete workflow. Vague "works with everything" framing gets ignored. |
 | r/selfhosted | medium | Rule 6 confines projects younger than three months to the New Project Megathread; rule 5 gives a Wednesday window for tools that are not self-hosted. A Thursday launch here needs the megathread or a self-hosted angle. Flair is mandatory and the post is removed without it. |
 | r/SideProject | low | Tolerates self-promo by design, low traffic. Cheap cross-post, not a launch. |

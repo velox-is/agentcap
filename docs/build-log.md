@@ -92,3 +92,29 @@ while the posting account is still too young to link it.
 - Case-study rewrite moved to days 4–5 with the review on day 6, four days before
   posting. Re-run `scripts/measure-late.mjs` on the rewrite day so every number
   in the document comes from that day's output.
+
+## 2026-11-26 (day 3)
+
+- LocalLLaMA retry posted on `1y50mkx` at 16:53 KST, correcting the
+  "implement a loop guard" reply with the YaRN/rope-scaling read, one
+  `llama-cli --rope-scaling none` paste and the DRY sampler flags. Plainer than
+  day 1 on purpose: short sentences, no rhetorical frame.
+- Second comment in r/ClaudeAI (`1y4zutq`) on the 54k-token rule-card load, with
+  the grep-the-index loader instead of a full load.
+- Checks at +10 and +50 were both live on both. The LocalLLaMA one was gone by
+  +57 and the ClaudeAI one by the next morning. No modmail, no notification, no
+  rule quoted.
+- **The removal cause is the account, not the sub.** All eight comments across
+  four subs are gone, removed one to sixteen hours after posting. Anonymous view
+  of the profile says "doesn't have any comments yet", 0 comment karma, while a
+  control profile loads fine in the same browser. Day-3 LocalLLaMA died inside
+  the 90 minute window, so by the pre-set rule LocalLLaMA comes off the launch
+  list with no fourth attempt this week.
+- New thing learned about the tooling, and it cost an hour: old.reddit while
+  logged in keeps rendering your own removed comments and keeps showing the
+  score at 1. Author view is not a liveness signal. Only the fresh-profile
+  browser counts. `launch-metrics.md` now says so at the table head.
+- Evidence in `docs/evidence/`: the removal marker and the empty anonymous
+  profile.
+- Wrote nothing to the case study. It still belongs to days 4–5 with the fresh
+  `measure-late` run.
