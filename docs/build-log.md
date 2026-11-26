@@ -165,3 +165,31 @@ while the posting account is still too young to link it.
 - A comment permalink on a fresh anonymous profile returns "Page not found"; the
   thread URL with `?sort=old` plus `scrollIntoView` on the comment id is what
   actually renders. Use that for every future control read.
+
+## 2026-11-26 17:14-17:53 (day 3, the bans - the real answer)
+
+- Three permanent sub bans arrived, and they settle the cause. r/selfhosted
+  17:14 on the off-topic rule; r/n8n and r/ClaudeAI 17:53 on the identical line
+  "Bots and bot-like accounts are not welcome", both instructing an appeal to
+  /r/BotBouncer.
+- So the r/test control was right and the conclusion drawn from it was wrong.
+  Not shadowbanned - classified as a bot by a moderation bot that at least two of
+  the target subs run. A classifier explains the whole shape: silent, hours late,
+  no rule quoted, identical wording across two unrelated subs.
+- The "moderators working a queue" line in the 13:10 entry above is superseded.
+  Queue batching was a plausible story for the timing; it was not the mechanism.
+- Consequence for the launch: sub selection is dead as a strategy. Four of the
+  five Reddit targets will not hold a post. The day-8 gate is now pass/fail on the
+  BotBouncer appeal rather than on a comment surviving. HN was already primary and
+  is now the plan, full stop, unless the appeal reverses before day 8.
+- BotBouncer already has an overview post for the account
+  (/r/BotBouncer/comments/1y5203m/overview_for_veloxis/) tagged `banned`. Its body
+  is a link card to a botbouncer.com page that now redirects to /lander and
+  renders empty headless, so the classifier's own reasoning is not readable from
+  here. The appeal message is the route, not that page.
+- Still blocked on the same thing: no Reddit session in the scratch profile and no
+  stored password, so neither appeal can be sent.
+- Cost: third diagnosis in one day. Each was cheap to overturn and the docs now say
+  which entry supersedes which, but the lesson is that a control proving "not
+  account-level" does not prove "sub-level" - the third option was a classifier
+  some subs run and others do not.

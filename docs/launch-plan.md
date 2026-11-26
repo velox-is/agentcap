@@ -18,28 +18,35 @@ the calendar and 12-03 is posting day 10: nine warm-up days, then the post.
 The old pin said "day 11 / Dec 6" and was wrong twice — Dec 6 is a Sunday,
 and the count carried one extra day on top of that.
 
-**Day 3 changed the plan twice over.** First reading was an account-level filter:
-eight warm-up comments across four subs removed one to sixteen hours after
-posting, no modmail, no rule quoted, profile empty anonymously. The r/test control
-then killed half of that. A one-word comment posted there at 09:15 is still visible
-logged out at +3h53m (13:08, fresh anonymous profile, no removal marker) and
-renders on the profile, so the account is not shadowbanned, confidence 0.95. The
-removals are moderator removals on strict subs, worked from a queue in batches,
-which is why they arrive hours late and silently.
+**Day 3 changed the plan twice over, then a third time when the bans landed.** First
+reading was an account-level filter: eight warm-up comments across four subs
+removed one to sixteen hours after posting, no modmail, no rule quoted, profile
+empty anonymously. The r/test control then killed half of that. A one-word comment
+posted there at 09:15 is still visible logged out at +3h53m (13:08, fresh
+anonymous profile, no removal marker) and renders on the profile, so the account
+is not shadowbanned, confidence 0.95.
+
+Then at 17:14–17:53 three subs issued **permanent bans** — r/selfhosted on the
+off-topic rule, and r/n8n and r/ClaudeAI on the identical line "Bots and bot-like
+accounts are not welcome", both pointing at `/r/BotBouncer` for the appeal. So the
+cause is a bot classifier, not moderators working a queue. Not shadowbanned, but
+classified as a bot, which is worse for launch purposes: four of the five target
+subs will not hold a post from this account.
 
 The control also handed over a measurable lever: r/test runs an `!cqs`
 AutoModerator bot that reports the account's sitewide Contributor Quality Score,
-and other accounts in the same thread scored "lowest", "low" and "moderate".
-CQS is what drives queue-first removal on exactly the subs that took the
-comments out. Next commenting day posts `!cqs` and records the score.
+and other accounts in the same thread scored "lowest", "low" and "moderate". CQS
+is the classifier's own number. Next commenting day posts `!cqs` and records it.
 
 Consequences, all of them:
 
 - **HN is primary.** New-account comments there are visible and merely rank low,
   with no filter to clear. Dec 3 stands, HN-only if it has to be.
-- **Reddit is conditional, gated on day 8.** One comment visible logged out by
-  then on a given sub and that sub launches; still dark and it is HN-only and
-  Reddit gets posted whenever it clears. The gate is explicit below, not a hope.
+- **Reddit is conditional, gated on day 8 — and now on an appeal.** One comment
+  visible logged out by then on a given sub and that sub launches; still dark and
+  it is HN-only and Reddit gets posted whenever it clears. The gate is explicit
+  below, not a hope. With three subs banned the realistic route is the
+  /r/BotBouncer appeal, not a lucky comment.
 - **LocalLLaMA is off the list** by the pre-set rule, no fourth attempt this week.
 - **Commenting is capped at one a day** until something is visible. Eight
   comments into a void is material for a later post, not progress.
@@ -75,7 +82,7 @@ Rules that apply the whole time:
 | --- | --- | --- |
 | 1 | Wed 11-25 | baseline row, three comments — done |
 | 2 | Wed 11-25 | replies first, two comments — done, LocalLLaMA removals logged |
-| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. r/test control passed at +3h53m logged out: not a shadowban. |
+| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — both removed, then THREE PERMANENT BANS landed (selfhosted, n8n, ClaudeAI). r/test control passed at +3h53m logged out: not a shadowban, but classified as a bot. |
 | 4 | Fri 11-27 | case-study rewrite, first pass |
 | 5 | Sat 11-28 | case-study rewrite finished; two comments |
 | 6 | Sun 11-29 | case-study review signed off; first comment naming agentcap, no link |
@@ -103,9 +110,10 @@ Rewriting it on launch morning is how a typo in the numbers ships.
       out at +10. Visible there means the account is fine and the subs are the
       problem. Invisible there means the account is filtered and sub choice stops
       mattering.
-- [ ] Day 3: appeal and modmail. Appeal at `reddit.com/appeal` by hand in the
-      scratch profile, the form is React. Then one modmail to r/ClaudeAI naming a
-      single comment URL and asking for a manual approval.
+- [ ] Day 3: appeal. **/r/BotBouncer first** — that is the route two of the three
+      bans name, one message, name the account, say a person ships the tool, ask
+      for the classification to be reversed. Then a separate modmail to
+      r/selfhosted on the off-topic reason. Both blocked on the lost login.
 
 ## Days 4–6 — the case study, then credibility
 
@@ -128,9 +136,11 @@ measurement, not a pitch.
 
 - [ ] Day 7: first comment with the link, in a thread that asked for a tool.
 - [ ] Day 8, the gate: take the sub whose comment is still visible logged out at
-      +90 and put it in the launch slot. If none is, the launch is HN-only and
-      Reddit is posted later whenever a comment finally holds. Write the answer
-      into the schedule row, do not leave it implied.
+      +90 and put it in the launch slot. With three subs banned the gate is
+      really "did the BotBouncer appeal land", so read the ban state, not just a
+      comment. If none is visible, the launch is HN-only and Reddit is posted
+      later whenever a comment finally holds. Write the answer into the schedule
+      row, do not leave it implied.
 - [ ] Day 8: check referrer-less traffic in `gh api repos/velox-is/agentcap/traffic/views`.
 - [ ] Day 9: confirm the signup endpoint answers 200 with `ok:true` and that the KV
       count equals the metrics row.
@@ -160,9 +170,9 @@ Written from each sub's own pinned rules, not scraped summaries:
 | Sub | Fit | Rule that decides the post |
 | --- | --- | --- |
 | HN Show HN | **primary** | No filter to clear. New-account comments and posts are visible from the first one, they just rank low. Account is a week old on 12-01, so the launch date clears the minimum. Title is fixed as `Show HN: agentcap – ...`. |
-| r/ClaudeAI | high, gated | Loosest of the four about tools. Hostile to hype, fine with a screenshot and a short mechanism description. Removed a day-3 comment, so it launches only if the day-8 gate passes on it. |
-| r/n8n | medium, gated | Short tool post tolerated, but it has to name a concrete workflow. Vague "works with everything" framing gets ignored. Gated the same way. |
-| r/selfhosted | medium, gated | Rule 6 confines projects younger than three months to the New Project Megathread; rule 5 gives a Wednesday window for tools that are not self-hosted. A Thursday launch here needs the megathread or a self-hosted angle. Flair is mandatory and the post is removed without it. Gated the same way. |
+| r/ClaudeAI | **banned** | Permanent ban 11-26 17:53: "Bots and bot-like accounts are not welcome". Route is the /r/BotBouncer appeal. Only if it reverses does this sub launch. |
+| r/n8n | **banned** | Permanent ban 11-26 17:53, same bot-classifier line as ClaudeAI, same appeal route. |
+| r/selfhosted | **banned** | Permanent ban 11-26 17:14 on the off-topic rule (rule 6/5), not the bot one. Appeal to its mods directly — this is the only one of the three an argument can win. |
 | r/LocalLLaMA | off the list | Removed three comments, the third inside 57 minutes. Rule 3 bans LLM-generated copy, but plainer prose did not save it either. No fourth attempt this week. If it comes back before day 9 the launch post here must be a link post with a short plain body, not a text post. |
 | r/SideProject | low | Tolerates self-promo by design, low traffic. Cheap cross-post, not a launch. |
 
