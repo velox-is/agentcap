@@ -18,13 +18,28 @@ the calendar and 12-03 is posting day 10: nine warm-up days, then the post.
 The old pin said "day 11 / Dec 6" and was wrong twice — Dec 6 is a Sunday,
 and the count carried one extra day on top of that.
 
-**Day 3 changed the diagnosis.** All eight warm-up comments across four subs were
-removed one to sixteen hours after posting, with no modmail and no rule quoted,
-and the anonymous view of the profile shows zero comments and zero comment karma
-while a control profile loads normally. That is the account sitting in Reddit's
-new-account filter, not four moderators agreeing. Consequences: LocalLLaMA is off
-the list by the pre-set rule, and every sub stays provisional until the filter
-clears or an appeal lands. Details and evidence in `launch-metrics.md`.
+**Day 3 changed the plan twice over.** First reading was an account-level filter:
+eight warm-up comments across four subs removed one to sixteen hours after
+posting, no modmail, no rule quoted, profile empty anonymously. The r/test control
+then killed half of that. A one-word comment posted there at 09:15 is still visible
+logged out at +53 and renders on the profile, so the account is not shadowbanned,
+confidence 0.9. The removals are moderator removals on strict subs, worked from a
+queue in batches, which is why they arrive hours late and silently.
+
+Consequences, all of them:
+
+- **HN is primary.** New-account comments there are visible and merely rank low,
+  with no filter to clear. Dec 3 stands, HN-only if it has to be.
+- **Reddit is conditional, gated on day 8.** One comment visible logged out by
+  then on a given sub and that sub launches; still dark and it is HN-only and
+  Reddit gets posted whenever it clears. The gate is explicit below, not a hope.
+- **LocalLLaMA is off the list** by the pre-set rule, no fourth attempt this week.
+- **Commenting is capped at one a day** until something is visible. Eight
+  comments into a void is material for a later post, not progress.
+- **The account still needs to look alive** for the appeal and the modmail, so
+  the one a day goes to r/test or ClaudeAI.
+
+Details, evidence and confidence numbers in `launch-metrics.md`.
 
 Rules that apply the whole time:
 
@@ -37,6 +52,9 @@ Rules that apply the whole time:
 - **Two or three comments a day, not a fixed three.** A constant three reads as a
   schedule. Vary length: one short and blunt, one longer and technical. Do not
   answer everything on the page.
+- **One a day while nothing is visible.** From day 3 the cap is one comment a day
+  in r/test or ClaudeAI until a comment survives 90 minutes logged out. The cap
+  lifts on the first one that does.
 - **One post per day maximum** after day 6, and only if there is something new.
 
 ## Schedule
@@ -45,12 +63,12 @@ Rules that apply the whole time:
 | --- | --- | --- |
 | 1 | Wed 11-25 | baseline row, three comments — done |
 | 2 | Wed 11-25 | replies first, two comments — done, LocalLLaMA removals logged |
-| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. Cause is the account. |
+| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. r/test control passed: not a shadowban. |
 | 4 | Fri 11-27 | case-study rewrite, first pass |
 | 5 | Sat 11-28 | case-study rewrite finished; two comments |
 | 6 | Sun 11-29 | case-study review signed off; first comment naming agentcap, no link |
 | 7 | Mon 11-30 | first comment with a link, in a thread that asked for a tool |
-| 8 | Tue 12-01 | link follow-up, check referrer-less traffic |
+| 8 | Tue 12-01 | GATE: is one Reddit comment visible logged out? Yes → that sub launches. No → HN-only. Also link follow-up and referrer-less traffic. |
 | 9 | Wed 12-02 | prep day, then stop posting |
 | 10 | Thu 12-03 | launch, 22:00–23:00 KST |
 
@@ -69,6 +87,13 @@ Rewriting it on launch morning is how a typo in the numbers ships.
       browser profile. Logged-in old.reddit keeps rendering your own removed
       comments and keeps the score at 1, so it will tell you everything is fine
       while nobody can see them.
+- [ ] Day 3: run the no-moderation control. One word in r/test, checked logged
+      out at +10. Visible there means the account is fine and the subs are the
+      problem. Invisible there means the account is filtered and sub choice stops
+      mattering.
+- [ ] Day 3: appeal and modmail. Appeal at `reddit.com/appeal` by hand in the
+      scratch profile, the form is React. Then one modmail to r/ClaudeAI naming a
+      single comment URL and asking for a manual approval.
 
 ## Days 4–6 — the case study, then credibility
 
@@ -90,6 +115,10 @@ measurement, not a pitch.
 ## Days 7–9 — link, then prep
 
 - [ ] Day 7: first comment with the link, in a thread that asked for a tool.
+- [ ] Day 8, the gate: take the sub whose comment is still visible logged out at
+      +90 and put it in the launch slot. If none is, the launch is HN-only and
+      Reddit is posted later whenever a comment finally holds. Write the answer
+      into the schedule row, do not leave it implied.
 - [ ] Day 8: check referrer-less traffic in `gh api repos/velox-is/agentcap/traffic/views`.
 - [ ] Day 9: confirm the signup endpoint answers 200 with `ok:true` and that the KV
       count equals the metrics row.
@@ -99,10 +128,14 @@ measurement, not a pitch.
 
 ## Day 10 — launch (Thu 2026-12-03, 22:00–23:00 KST)
 
-Do not post early. One sub, then Show HN the same day, then nothing.
+Do not post early. **HN first, and HN alone if the day-8 gate failed.** Show HN
+is the primary because a new HN account is visible from the first comment; Reddit
+gating is not a factor there. If the gate passed, the Reddit sub goes up in the
+same hour, HN still first so the HN post gets the attention.
 
-- [ ] Post. Body opens with the failure mode the case study is about, links the
-      case study, not the repo root.
+- [ ] Show HN. Title is fixed as `Show HN: agentcap – ...`, body opens with the
+      failure mode the case study is about, links the case study, not the repo
+      root.
 - [ ] Sit in the thread for 4 hours. Every question answered with a number or a
       file path.
 - [ ] Do not repost on a second sub the same day. Cross-posting same-day is the
@@ -114,12 +147,12 @@ Written from each sub's own pinned rules, not scraped summaries:
 
 | Sub | Fit | Rule that decides the post |
 | --- | --- | --- |
-| r/ClaudeAI | high | Loosest of the four about tools. Hostile to hype, fine with a screenshot and a short mechanism description. Also removed a comment on day 3, so it is not proven either. |
-| r/LocalLLaMA | high value, low reliability | OFF THE LIST as of day 3. Removed three comments, the third one inside 57 minutes. Rule 3 bans LLM-generated copy, but the removals turned out to be account-level, so plainer prose is not what saves it. No fourth attempt this week. If it returns before day 9, the launch post here must be a link post with a short plain body, not a text post. |
-| r/n8n | medium | Short tool post tolerated, but it has to name a concrete workflow. Vague "works with everything" framing gets ignored. |
-| r/selfhosted | medium | Rule 6 confines projects younger than three months to the New Project Megathread; rule 5 gives a Wednesday window for tools that are not self-hosted. A Thursday launch here needs the megathread or a self-hosted angle. Flair is mandatory and the post is removed without it. |
+| HN Show HN | **primary** | No filter to clear. New-account comments and posts are visible from the first one, they just rank low. Account is a week old on 12-01, so the launch date clears the minimum. Title is fixed as `Show HN: agentcap – ...`. |
+| r/ClaudeAI | high, gated | Loosest of the four about tools. Hostile to hype, fine with a screenshot and a short mechanism description. Removed a day-3 comment, so it launches only if the day-8 gate passes on it. |
+| r/n8n | medium, gated | Short tool post tolerated, but it has to name a concrete workflow. Vague "works with everything" framing gets ignored. Gated the same way. |
+| r/selfhosted | medium, gated | Rule 6 confines projects younger than three months to the New Project Megathread; rule 5 gives a Wednesday window for tools that are not self-hosted. A Thursday launch here needs the megathread or a self-hosted angle. Flair is mandatory and the post is removed without it. Gated the same way. |
+| r/LocalLLaMA | off the list | Removed three comments, the third inside 57 minutes. Rule 3 bans LLM-generated copy, but plainer prose did not save it either. No fourth attempt this week. If it comes back before day 9 the launch post here must be a link post with a short plain body, not a text post. |
 | r/SideProject | low | Tolerates self-promo by design, low traffic. Cheap cross-post, not a launch. |
-| HN Show HN | low | Account must be a week old minimum. Title is fixed as `Show HN: agentcap – ...`. |
 
 ## Blockers
 

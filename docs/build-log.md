@@ -118,3 +118,28 @@ while the posting account is still too young to link it.
   profile.
 - Wrote nothing to the case study. It still belongs to days 4–5 with the fresh
   `measure-late` run.
+
+## 2026-11-26 (day 3, correction — the r/test control)
+
+- The account-level diagnosis above was half wrong and the control killed it. One
+  word posted in r/test at 09:15:28 (`19t6yecnc6bvp`) was still visible
+  anonymously at +53 minutes and now renders on the profile overview. r/test has
+  essentially no moderation, so a shadowban would have taken it too. Confidence
+  the account is not shadowbanned: 0.9.
+- So the removals are moderator removals on strict subs, done from a mod queue in
+  batches, which is why they arrived hours late and without mail. That is the
+  boring answer and it is where the day-1 evidence already pointed before it got
+  over-generalised.
+- Email was already verified (`veloxis.co@gmail.com`, old.reddit prefs shows
+  `email (verified)`), so it was never the cause. Ruled out.
+- Plan consequences: HN is now primary, Reddit is conditional on a day-8 gate
+  (one comment visible logged out by then on a sub or that sub does not launch),
+  and commenting is capped at one a day until something survives 90 minutes.
+- Generalised the author-view trap into a rule above the metrics table: any check
+  that runs through the session that produced the artifact is not a check. Verify
+  in a second context, always with a control created by someone else.
+- Cost of the mistake: about an hour of theory built on eight data points from one
+  surface, plus one doc rewrite. The control that would have settled it took four
+  minutes to post.
+- The 9222 scratch profile dropped its Reddit session on the Chrome restart, so
+  the appeal form and the modmail to r/ClaudeAI mods are both still open.
