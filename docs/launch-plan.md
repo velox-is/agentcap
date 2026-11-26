@@ -22,9 +22,16 @@ and the count carried one extra day on top of that.
 eight warm-up comments across four subs removed one to sixteen hours after
 posting, no modmail, no rule quoted, profile empty anonymously. The r/test control
 then killed half of that. A one-word comment posted there at 09:15 is still visible
-logged out at +53 and renders on the profile, so the account is not shadowbanned,
-confidence 0.9. The removals are moderator removals on strict subs, worked from a
-queue in batches, which is why they arrive hours late and silently.
+logged out at +3h53m (13:08, fresh anonymous profile, no removal marker) and
+renders on the profile, so the account is not shadowbanned, confidence 0.95. The
+removals are moderator removals on strict subs, worked from a queue in batches,
+which is why they arrive hours late and silently.
+
+The control also handed over a measurable lever: r/test runs an `!cqs`
+AutoModerator bot that reports the account's sitewide Contributor Quality Score,
+and other accounts in the same thread scored "lowest", "low" and "moderate".
+CQS is what drives queue-first removal on exactly the subs that took the
+comments out. Next commenting day posts `!cqs` and records the score.
 
 Consequences, all of them:
 
@@ -54,7 +61,12 @@ Rules that apply the whole time:
   answer everything on the page.
 - **One a day while nothing is visible.** From day 3 the cap is one comment a day
   in r/test or ClaudeAI until a comment survives 90 minutes logged out. The cap
-  lifts on the first one that does.
+  lifts on the first one that does. The control cleared 90 minutes at +3h53m, so
+  the cap lifts now; the r/test control is a control, not warm-up content, and
+  does not itself count.
+- **Summon `!cqs` in r/test on the next comment** and log the score. It is the
+  only measurable proxy for the removals and it doubles as a legal one-a-day
+  comment.
 - **One post per day maximum** after day 6, and only if there is something new.
 
 ## Schedule
@@ -63,7 +75,7 @@ Rules that apply the whole time:
 | --- | --- | --- |
 | 1 | Wed 11-25 | baseline row, three comments — done |
 | 2 | Wed 11-25 | replies first, two comments — done, LocalLLaMA removals logged |
-| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. r/test control passed: not a shadowban. |
+| 3 | Thu 11-26 | LocalLLaMA retry + ClaudeAI — done, both removed. r/test control passed at +3h53m logged out: not a shadowban. |
 | 4 | Fri 11-27 | case-study rewrite, first pass |
 | 5 | Sat 11-28 | case-study rewrite finished; two comments |
 | 6 | Sun 11-29 | case-study review signed off; first comment naming agentcap, no link |

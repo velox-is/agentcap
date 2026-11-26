@@ -143,3 +143,25 @@ while the posting account is still too young to link it.
   minutes to post.
 - The 9222 scratch profile dropped its Reddit session on the Chrome restart, so
   the appeal form and the modmail to r/ClaudeAI mods are both still open.
+
+## 2026-11-26 13:10 (day 3, control re-read at 4h)
+
+- Re-read the r/test control on a third context — a fresh anonymous profile that
+  has never held a Reddit session — at +3h53m. Still there, no removal marker,
+  and the screenshot renders the full thread around it. Confidence the account is
+  not shadowbanned is now 0.95, up from 0.9.
+  `docs/evidence/day3-rtest-control-4h-anon.png`.
+- The control thread also handed over a real lever. r/test runs an `!cqs`
+  AutoModerator bot that prints the caller's sitewide Contributor Quality Score,
+  and the three other accounts that summoned it in the same thread scored
+  "lowest", "low", "moderate". CQS is the mechanism behind queue-first removal on
+  exactly the subs that ate the comments. Next commenting day posts `!cqs` and
+  records the number, which replaces a guess with a measurement.
+- Cap lifted: the control cleared the 90-minute bar, so the one-a-day rule is off.
+  The control itself does not count as warm-up content.
+- Both headless Chromes died when their launching terminal session ended. Fixed by
+  `nohup ... & disown` in `/tmp/chv6b.sh` and `/tmp/chv7b.sh` so they survive the
+  session. Recorded because losing the browser mid-check has now cost two windows.
+- A comment permalink on a fresh anonymous profile returns "Page not found"; the
+  thread URL with `?sort=old` plus `scrollIntoView` on the comment id is what
+  actually renders. Use that for every future control read.

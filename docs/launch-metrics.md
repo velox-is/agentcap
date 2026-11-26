@@ -48,7 +48,7 @@ browser on :9223 and is the only surface that counts.
 | 2026-11-26 | ClaudeAI | 19t5oz448nc3m | 1 | 0 | REMOVED | same pattern |
 | 2026-11-25 | LocalLLaMA | 19t5qkj9mvutf | 1 | 0 | REMOVED | DAY 3. +10 live, +45 live, gone by +57 anonymous. No modmail, no reason. |
 | 2026-11-25 | ClaudeAI | 19t5qqkk5nbs5 | 1 | 0 | REMOVED | DAY 3. +10 live, +42 live, +57 live, gone by +16h anonymous. No modmail, no reason. |
-| 2026-11-26 | r/test | 19t6yecnc6bvp | 1 | 0 | LIVE | control. "checking", posted 09:15:28, visible anonymously at +1, +11, +20, +40, +47, +49, +52 min and still up at +53. |
+| 2026-11-26 | r/test | 19t6yecnc6bvp | 1 | 0 | LIVE | control. "checking", posted 09:15:28, visible anonymously at +1, +11, +20, +40, +47, +49, +52, +53, +60, +70, +90 min and STILL UP at +3h53m (13:08) on a fresh anonymous profile, no removal marker. |
 
 Day 3 checks, both comments, all three windows:
 
@@ -77,9 +77,17 @@ posting, with no modmail and no rule quoted, and the profile read "doesn't have
 any comments yet" anonymously at 09:06.
 
 What the control disproved: a single word posted in r/test at 09:15:28 is still
-visible anonymously at +53 minutes, and the profile overview now renders it. r/test
-has essentially no moderation, so a shadowban would have taken it too. The account
-can be seen. Confidence the account is not shadowbanned: 0.9.
+visible anonymously at +3h53m (13:08, fresh anonymous profile, no removal
+marker), and the profile overview renders it. r/test has essentially no
+moderation, so a shadowban would have taken it too. The account can be seen.
+Confidence the account is not shadowbanned: 0.95.
+
+One thing the control did surface: r/test runs an `!cqs` AutoModerator bot that
+reports the account's sitewide Contributor Quality Score. Three other accounts
+summoned it in the same thread and got "lowest", "low", "moderate". Ours is
+worth summoning on the next comment — CQS drives exactly the kind of queue-first
+removal seen on LocalLLaMA and ClaudeAI, and it is the one lever here that can be
+measured instead of guessed.
 
 So the removals are moderator removals, just slow ones, and slow is the normal
 shape when a mod queue is worked in batches rather than live. That returns the
@@ -136,7 +144,10 @@ is still visible logged out at +90.
 ## Open actions
 
 - Appeal form at `reddit.com/appeal`, filled by hand in the scratch profile. The
-  form is React, CDP does not reach it.
+  form is React, CDP does not reach it. Blocked on the lost login.
+- Comment `!cqs` in r/test on the next commenting day and record the score. It is
+  the only measurable proxy for the removals. `!cqs` on its own is also a legal
+  one-a-day comment under the cap.
 - Modmail to r/ClaudeAI mods asking for a manual approval on one comment URL.
   An approval gets visible content and karma without waiting on the appeal.
 - Email already verified (`veloxis.co@gmail.com`, prefs shows `email (verified)`).
