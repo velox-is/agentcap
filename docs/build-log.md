@@ -228,3 +228,16 @@ while the posting account is still too young to link it.
   a vouch/reply loop instead of "post and sit".
 - Cost: fourth surface to behave like a filter. The pattern across Reddit and HN is
   that brand-new accounts are suppressed first and judged second, everywhere.
+
+### Blockers found while doing the day-3/4 checklist
+
+- **Discord: no session in either headless profile.** discord.com/app redirects to
+  /login on both 9222 and 9223. Invites verified live and worth joining once a
+  session exists: `discord.gg/NousResearch` (Nous Research, 151,862 members),
+  `discord.gg/opencode` (from opencode.ai docs). `discord.gg/n8n` resolves to the
+  n8n guild (91,275). Needs an email+password login, same class of blocker as
+  Google, and the same one that is holding the Reddit appeal.
+- **community.n8n.io activation email** went to veloxis.co@gmail.com. Gmail is not
+  signed in anywhere headless, so it cannot be clicked from here.
+- Both are one-credential problems, not decisions. Nothing else on the checklist is
+  blocked by them yet - HN comments do not need either.

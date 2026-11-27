@@ -141,6 +141,33 @@ comment a day in r/test or ClaudeAI keeps the account looking alive for the
 appeal and the modmail without spending more. Cap lifts on the first comment that
 is still visible logged out at +90.
 
+## HN — day 4, first comment went dead
+
+HN was promoted to primary on the assumption it had no filter. It has one.
+
+| surface | what | status |
+| --- | --- | --- |
+| HN `veloxis` account | created 2026-11-27 09:25, karma 1, about filled, email set | profile renders logged out |
+| HN comment 50661374 | 09:28, Ask HN "What IDE do you use and how many agents touch your tickets" (50651107) | **`[dead]` within one minute** |
+
+Reads: author view showed it fine at 1 point with no marker; anonymous showed
+`[dead]`; the thread's comment count stayed at 3 and never counted it; it is
+absent from `/shownew`; still dead at +17 min. Evidence
+`docs/evidence/day3-hn-first-comment-dead.png`.
+
+Recovery is vouching (>30 karma) or account age, not editing. So the HN column is
+not a filter to clear, it is a filter to outlive. A week of history before day 10
+is now load-bearing rather than cautious.
+
+HN also runs a live Show HN throttle at `/showlim` — "temporarily restricting Show
+HNs because of a massive influx, mostly by users who aren't yet familiar with the
+site or its culture." Evidence `docs/evidence/day3-hn-showlim.png`. Show HN is still
+permitted for new accounts; the post just has to be assumed dead on arrival and
+checked logged out, never in author view.
+
+Guidelines, verbatim, and they are not advisory: "Don't post generated text or
+AI-edited text. HN is for conversation between humans."
+
 ## Three permanent bans — BotBouncer, not moderator judgement
 
 The r/test control read was correct and the conclusion drawn from it was wrong.
