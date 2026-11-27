@@ -240,3 +240,48 @@ the comments.
 | date | user | sub | thread | what they asked | followed up |
 | --- | --- | --- | --- | --- | --- |
 | — | — | — | — | none yet | — |
+
+## n8n forum — day 4, the first answer is held for approval
+
+Thread `331038`, "Find executions stuck in 'running' after a crash", posted
+2026-11-25 22:51 by `ticketwatch`, three posts at the time of writing. The
+thread is exactly the shape wanted: a real failure mode, an OP still in it, two
+replies that describe the symptom and one that gestures at a watchdog.
+
+Answer written, `reply_to_post_number=3`, addressed to `Mahdi_Eqbal` on the
+separation between detecting a stuck run and recovering it, then the three
+bounds (counter with a dead-letter exit, per-node timeouts, external watchdog),
+then the correlation-ID check that decides replay-versus-resume.
+
+Submission: `POST /posts` at 10:29:22 returned
+
+```
+200 {"action":"enqueued","success":true,"pending_count":1,
+     "pending_post":{"id":22315,"raw":"@Mahdi_Eqbal that separation ..."}}
+```
+
+Not published. Rendered in the thread under the reply as `AWAITING APPROVAL`,
+timestamped `5m`, for the account that posted it. Anonymous checks afterwards:
+
+| clock | anonymous `posts_count` | page contains `AWAITING APPROVAL` |
+| --- | --- | --- |
+| 10:34:56 | 3 | 0 |
+| 10:35:24 | 3 | 0 |
+
+So the post exists, has an id, and is invisible to anyone but the author. This
+is the forum's first-post moderation hold on a trust-level-0 account, not a
+failure of the post. `GET /review.json` is 403 for TL0, so the queue cannot be
+inspected from the account — only the wait and the outcome are observable.
+
+Two consequences:
+
+- **The hold is one-shot per account.** It should clear on approval and later
+  answers should post directly. That is a hypothesis, not a measurement — test it
+  on the second answer before assuming the forum is a same-hour surface.
+- **Answer early, not on launch day.** A held answer is worth nothing on the day
+  it is written. The forum is a warm-up surface with lead time built in, and the
+  "every comment answered within four hours" rule only starts once the answer is
+  actually visible.
+
+Status at 10:35 KST: held, awaiting approval, unverified whether it survives.
+Re-check before writing any second answer.
