@@ -143,14 +143,27 @@ measurement, not a pitch.
 
 Do not post early and do not submit anything to HN before this hour.
 
+**Known exposure: every comment from `veloxis` is dead at creation.** Three for
+three on 2026-11-27, at 5 min, 80 min and 85 min account age, essay-length and
+198-character alike — invisible to anonymous readers, `/newcomments`, Algolia and
+`showdead=1`, with karma rolling back to blank each time. The account is filtered
+and waiting has not fixed it. Assume the submission is dead on arrival and have
+the recovery ready before pressing submit.
+
+- [ ] Before the hour: have a second HN account, aged and above 30 karma, logged in
+      and ready to vouch. Without one there is no recovery path — the account
+      cannot vouch for itself.
 - [ ] Show HN. Title is fixed as `Show HN: agentcap – ...`, body opens with the
       failure mode the case study is about, links the case study, not the repo
       root.
-- [ ] **Immediately check it logged out** on `https://news.ycombinator.com/shownew`.
-      Author view will show it either way. If it is `[dead]` or absent, that is the
-      launch condition, not a reason to repost — a dead post recovers by vouching
-      from other accounts (>30 karma) and by moderators reading vouched items.
-      Do not delete and resubmit; that is banned.
+- [ ] **Check it logged out within 2 minutes** on
+      `https://news.ycombinator.com/shownew`. Author view will show it either way.
+      `[dead]` or absent is the launch condition, not a reason to repost — a dead
+      post recovers by vouching and by moderators reading vouched items. Do not
+      delete and resubmit; that is banned.
+- [ ] If dead: vouch from the second account, then re-check logged out at +5, +15
+      and +30 min. Vouching is the only lever and it either works in the first
+      half hour or it does not.
 - [ ] Put the case-study opening in the text field. Only post it as the first
       comment if the post does not appear at all.
 - [ ] Sit in the thread for 4 hours. Every question answered with a number or a
