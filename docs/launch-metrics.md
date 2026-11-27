@@ -285,3 +285,51 @@ Two consequences:
 
 Status at 10:35 KST: held, awaiting approval, unverified whether it survives.
 Re-check before writing any second answer.
+
+## HN — day 4, the second comment is dead too, so age is not the fix
+
+Second comment attempted at 10:43 on a live thread with no comments yet, article
+`A Brief Walk Through Program Space` (`50661711`, 1 point, 17 minutes old).
+Written against the essay's own argument: the "intern foresight" tell is not
+visible in the source, the diff is the measurement, and distance in Program Space
+is uncorrelated with mutation cost.
+
+It posted. `threads?id=veloxis` shows two rows for the account, `50661834` and
+`50661374`. Anonymous checks:
+
+| clock | comment | `[dead]` anonymous | `commtext` | in `/newcomments` | in Algolia |
+| --- | --- | --- | --- | --- | --- |
+| 10:45:53 | 50661834 | 1 | 0 | 0 | 0 hits |
+| 10:46:17–10:47:00 (x3) | 50661834 | 1 | 0 | — | — |
+| 10:46:18–10:47:00 (x3) | 50661374 | 1 | 0 | — | — |
+
+Parent item `50661711` still shows `comtr=0` anonymously at 10:45:53 — the
+comment does not exist for anyone but the author. Same tombstone shape as the
+first: `[dead]` with the body suppressed, never in `/newcomments`, never indexed.
+Karma stays 1.
+
+**This kills the age hypothesis.** Comment one was dead at account age ~5 minutes;
+comment two at ~80 minutes, after a login, on a thread with no competition. Both
+dead at creation. `UNVERIFIED → false`: waiting does not fix it.
+
+What the two attempts have in common, and the shape of the likely cause:
+
+- Both are three-paragraph essays, ~1,160 characters, no code block, no link.
+  HN's ring detector keys on prose shape as much as account age.
+- Both were posted from a headless Chrome on a datacentre-adjacent IP, minutes
+  after a fresh account was made on the same IP.
+- Both went through `POST /comment` on the same session cookie. Not a form
+  validation problem: the submit returned the item page, not an error.
+
+Consequence for the launch, and it is the important one: **a Show HN from this
+account has the same exposure.** The launch post cannot assume visibility. Day 10
+now needs a logged-out `/shownew` check inside the first two minutes and a
+vouching plan that does not depend on the account's own karma.
+
+What to try before day 10, cheapest first:
+
+1. One short comment — two sentences, lowercase, no structure. If the essays are
+the trigger, that survives.
+2. A comment posted from the non-headless browser on the normal network path.
+3. If neither works, the account is effectively filtered and the Show HN needs a
+   second, older account or a vouch before submitting.
