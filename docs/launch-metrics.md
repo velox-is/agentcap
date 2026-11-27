@@ -373,3 +373,36 @@ Next and only untested lever: post from the non-headless Chrome on the normal
 network path, one comment, then read it anonymous. If that is dead too, the
 account is filtered for good and day 10 needs an older account or a vouch, and
 the Show HN has to be submitted from something that has karma before it exists.
+
+### The rate limit is the second wall, and retrying keeps it up
+
+After the third comment landed at 10:50:00, every submit since has returned
+`/x?fnop=comment-toofast` — "You're posting too fast. Please slow down." Nine
+attempts between 11:09:04 and 11:42:39, every one refused, no post created:
+
+```
+11:09:04  11:12:17  11:18:30  11:24:54  11:33:46  11:35:08  11:42:39  toofast
+```
+
+Three comments inside 85 minutes from a zero-karma account trips it, and it does
+not clear in 50 minutes. The retries were roughly every 3 to 9 minutes, which is
+plausibly what keeps it pinned — each refused submit may refresh the window rather
+than being free.
+
+Consequence: **the warm-up cadence of one comment per day is not a preference, it
+is the ceiling.** The day-3-to-7 block in `launch-plan.md` says "one HN comment
+daily" and that is already the maximum this account can do; anything denser is
+refused before it can even be tested for the filter.
+
+Two things this does not tell us, both worth knowing before launch day:
+
+- Whether the limit is per account or per IP. If it is per IP, the launch-hour
+  session is unaffected (one post), but any reply cadence in the thread will hit
+  it.
+- Whether a *submission* shares the comment limit. A Show HN plus a first comment
+  is two writes in a row from an account that may still be in the window.
+
+Cheapest way to find out: stop touching HN for 30 minutes, then post one comment
+and check it anonymous. If it goes through, the window is time-based and 30
+minutes is enough. If it is still refused, the limit is longer than the launch
+hour and day 10 needs the post and the first comment spaced apart.
