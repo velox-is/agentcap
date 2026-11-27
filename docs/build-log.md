@@ -193,3 +193,38 @@ while the posting account is still too young to link it.
   which entry supersedes which, but the lesson is that a control proving "not
   account-level" does not prove "sub-level" - the third option was a classifier
   some subs run and others do not.
+
+## 2026-11-27 09:25-09:41 (day 4, HN account - and HN filters it too)
+
+- Created the HN account `veloxis`, karma 1, about line filled, email set. Profile
+  renders anonymously, so the account itself is not hidden.
+- Posted one genuine comment at 09:28 on Ask HN "What IDE do you use and how many
+  agents touch your tickets before merge?" (item 50651107). Answered the four
+  questions honestly: terminal, two agents, single-agent-with-tighter-harness, cost
+  curve flat then negative.
+- **It went [dead] within a minute.** Permalink 50661374. Author view shows it with
+  no marker and 1 point; anonymous shows `[dead]`; the thread's comment count stays
+  at 3, so it is not counted at all. Evidence:
+  `docs/evidence/day3-hn-first-comment-dead.png`.
+- So HN's new-account filter behaves like the Reddit classifier did, one comment
+  deep. This is the same failure mode on the surface that was supposed to be
+  primary. It changes the plan, not the target: a dead comment is recoverable by
+  vouching (needs >30 karma, which a new account does not have) or by the filter
+  relaxing with age. It is not recoverable by editing.
+- HN also has a sitewide Show HN throttle live right now, `/showlim`: "We're
+  temporarily restricting Show HNs because of a massive influx, mostly by users
+  who aren't yet familiar with the site or its culture." Evidence:
+  `docs/evidence/day3-hn-showlim.png`. Show HN is still allowed for new accounts,
+  it is just no longer a neutral surface.
+- Guidelines re-read and they are stricter than assumed: "Don't post generated
+  text or AI-edited text. HN is for conversation between humans." The de-LLM pass
+  on every comment and on the launch post is mandatory, not stylistic.
+- Registered on community.n8n.io as `veloxis` (Discourse, no approval queue) and
+  landed on the activation-sent screen. Activation email goes to
+  veloxis.co@gmail.com and neither headless profile has a Google session, so the
+  account is registered but not activated yet. Blocker, not a decision.
+- Consequence for the calendar: an HN comment being dead on day 4 means the day-10
+  post cannot be assumed visible. Launch-day checklist gets a logged-out check and
+  a vouch/reply loop instead of "post and sit".
+- Cost: fourth surface to behave like a filter. The pattern across Reddit and HN is
+  that brand-new accounts are suppressed first and judged second, everywhere.
