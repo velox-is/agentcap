@@ -406,3 +406,10 @@ Cheapest way to find out: stop touching HN for 30 minutes, then post one comment
 and check it anonymous. If it goes through, the window is time-based and 30
 minutes is enough. If it is still refused, the limit is longer than the launch
 hour and day 10 needs the post and the first comment spaced apart.
+
+**Tested, and 30 minutes is not enough.** Nothing touched HN between 11:42:39 and
+12:00:17 — 18 minutes idle, 70 minutes since the third comment was accepted. The
+12:00:17 submit returned `comment-toofast` again. The window is at least 70
+minutes on three comments, so the spacing rule for day 10 is not a precaution: a
+Show HN and a first comment have to be separated by more than an hour or the
+comment is simply refused.
