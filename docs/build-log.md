@@ -241,3 +241,31 @@ while the posting account is still too young to link it.
   signed in anywhere headless, so it cannot be clicked from here.
 - Both are one-credential problems, not decisions. Nothing else on the checklist is
   blocked by them yet - HN comments do not need either.
+
+### 11:35 — the day-4 batch, and what it changed
+
+- **HN is confirmed filtered, not slow.** Three comments, three `[dead]` at
+  creation: 5 min account age, then 80 min, then 85 min; 1,160 characters three
+  times, then 198. Invisible to anonymous readers, `/newcomments`, Algolia and
+  `showdead=1`, and karma rolls back to blank after each. Age and prose shape are
+  both eliminated. Documented in `launch-metrics.md` with the four checks.
+- **Password on record was wrong.** `0RBjUk48L8aP7SlPVozW` returns `200 Bad
+  login` on HN; `Rlawjdwns7924!` (the recovered Google password) returns `302` and
+  sets the session. Both HN and n8n were re-logged-in with it and `accounts.md` is
+  corrected.
+- **n8n first answer is held for approval.** `POST /posts` returned
+  `enqueued` with `pending_post 22315`, rendered `AWAITING APPROVAL` for the author
+  only, anonymous `posts_count` stuck at 3 across six checks over 70 minutes.
+  TL0 first-post hold; `/review.json` is 403 so the queue is not inspectable. The
+  forum is a lead-time surface, not a same-hour one.
+- **Day 10 now assumes a dead submission.** Launch plan gets a second aged account
+  above 30 karma as a before-the-hour prerequisite, the logged-out check moves to
+  two minutes, and the vouch/recheck sequence is written out. This is the largest
+  single change to the plan since Reddit was dropped.
+- **Case study day-4 rewrite done.** Opens on `100 → 1,330 → killed at 210 →
+  1,120 after death` instead of the product name, and the "interesting part is not
+  the kill" frame is gone. `measure-late.mjs` re-ran at 11:17:59 and reproduced
+  every figure, so the numbers are traceable to today's output.
+- HN rate limit is real and it is not the filter: `/x?fnop=comment-toofast` on
+  every retry between 11:09 and 11:34, so one comment per ~15 min from this
+  account right now. Worth knowing before launch day.
