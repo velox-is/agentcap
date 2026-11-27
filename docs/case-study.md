@@ -1,8 +1,10 @@
 # A cap is only a cap if the number it checks is true
 
-`agentcap` is a local proxy that counts what agents spend and kills them when they run past a budget. The interesting part is not the kill. It is that the token number the kill reads has to be correct, and the hard case is usage that arrives after the decision has already been made.
+A task capped at 100 tokens spent 1,330. The proxy killed it at 210. The remaining 1,120 tokens arrived afterwards, batched by an exporter that had been holding them, against a task that was already dead.
 
-This is a run, not an illustration. `scripts/measure-late.mjs` starts the real CLI against a mock upstream, caps a task at **100 tokens**, lets the stream breach, then reports three real spans against the now-dead task over OTLP. The numbers below are that script's output.
+`agentcap` is a local proxy that counts what agents spend and kills them when they run past a budget. Killing is the easy half. The half that decides whether the number on the dashboard means anything is usage that shows up after the decision has already been made.
+
+This is a run, not an illustration. `scripts/measure-late.mjs` starts the real CLI against a mock upstream, caps a task at **100 tokens**, lets the stream breach, then reports three real spans against the now-dead task over OTLP. The numbers below are that script's output, re-run 2026-11-27 11:17 KST and unchanged: `cap 100, tokensAtBreach 210, lateTokens 1120 over 3 spans, tokensTotal 1330, status stuck, steps 4, untrackedSteps 0`.
 
 ## What the run produced
 

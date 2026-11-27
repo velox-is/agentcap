@@ -114,10 +114,12 @@ Rewriting it on launch morning is how a typo in the numbers ships.
 The case study is the artifact the launch post links. It has to read as a
 measurement, not a pitch.
 
-- [ ] Day 4: rewrite the opening. First sentence is the failure mode, not the
+- [x] Day 4: rewrite the opening. First sentence is the failure mode, not the
       product name. Drop the "the interesting part is not the kill" frame.
+      Done 11:18 — opens on `100 → 1,330 → killed at 210 → 1,120 after death`.
 - [ ] Day 5: re-run `scripts/measure-late.mjs` and paste fresh output. Every
       number in the document must match a line the script printed today.
+      (Re-run once already at 11:17:59, identical; do it again on day 5.)
 - [ ] Day 5: cut the two defensive passages — the "a reader who sees only cap 100
       spent 210 concludes the cap is decorative" paragraph is argued at twice the
       length it needs.
